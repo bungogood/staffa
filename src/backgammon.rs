@@ -153,38 +153,38 @@ impl State {
 
     pub fn display(&self) {
         println!("Position ID: {}", self.position_id());
-        println!("+13-14-15-16-17-18------19-20-21-22-23-24-+");
+        println!("┌13─14─15─16─17─18─┬───┬19─20─21─22─23─24─┬───┐");
         for row in 0..5 {
-            print!("|");
+            print!("│");
             for point in 12..=23 {
                 Self::print_point(self.board[point], row);
 
                 if point == 17 {
-                    print!("|");
+                    print!("│");
                     Self::print_point(-self.bar.1, row);
-                    print!("|");
+                    print!("│");
                 }
             }
-            print!("|");
+            print!("│");
             Self::print_point(-self.off.1, row);
-            println!();
+            println!("│");
         }
-        println!("|                  |BAR|                  |OFF");
+        println!("│                  │BAR│                  │OFF│");
         for row in (0..5).rev() {
-            print!("|");
+            print!("│");
             for point in (0..=11).rev() {
                 if point == 5 {
-                    print!("|");
+                    print!("│");
                     Self::print_point(self.bar.0, row);
-                    print!("|");
+                    print!("│");
                 }
                 Self::print_point(self.board[point], row)
             }
-            print!("|");
+            print!("│");
             Self::print_point(self.off.0, row);
-            println!();
+            println!("│");
         }
-        println!("+12-11-10--9--8--7-------6--5--4--3--2--1-+");
+        println!("└12─11─10──9──8──7─┴───┴─6──5──4──3──2──1─┴───┘");
     }
 
     fn print_point(value: i32, row: i32) {
