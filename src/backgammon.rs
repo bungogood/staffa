@@ -1,5 +1,11 @@
 use base64::{engine::general_purpose, Engine as _};
-use std::ops::Add;
+use std::{
+    fmt::{Display, Formatter, Result},
+    ops::Add,
+};
+
+const BAR: usize = 25;
+const OFF: usize = 24;
 
 #[derive(Clone, Debug)]
 pub struct State {
@@ -7,6 +13,35 @@ pub struct State {
     bar: (i32, i32),
     off: (i32, i32),
     is_white: bool,
+}
+
+#[derive(Clone, Debug)]
+pub struct Action {
+    pub from: usize,
+    pub to: usize,
+}
+
+impl Action {
+    pub fn new(from: usize, to: usize) -> Self {
+        Action {
+            from: from - 1,
+            to: to - 1,
+        }
+    }
+
+    pub fn from<S: Into<String>>(ms: S) -> Option<Self> {
+        let ms = ms.into();
+        let mut ms = ms.split('/');
+        let from = ms.next()?.parse::<usize>().ok()? - 1;
+        let to = ms.next()?.parse::<usize>().ok()? - 1;
+        Some(Action { from, to })
+    }
+}
+
+impl Display for Action {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        write!(f, "{}/{}", self.from + 1, self.to + 1)
+    }
 }
 
 impl State {
@@ -24,6 +59,7 @@ impl State {
         }
     }
 
+    #[inline]
     fn bar(&self, player: bool) -> i32 {
         match player {
             true => self.bar.0,
@@ -31,10 +67,56 @@ impl State {
         }
     }
 
+    #[inline]
     fn off(&self, player: bool) -> i32 {
         match player {
             true => self.off.0,
             false => self.off.1,
+        }
+    }
+
+    pub fn apply_action(&self, action: Action) -> State {
+        let mut board = self.board.clone();
+        let mut bar = self.bar;
+        let mut off = self.off;
+
+        if self.is_white {
+            if action.from == BAR {
+                bar.0 -= 1;
+            } else {
+                board[action.from] -= 1;
+            }
+
+            if action.to == OFF {
+                off.0 += 1;
+            } else if board[action.to] == -1 {
+                board[action.to] = 1;
+                bar.1 += 1;
+            } else {
+                board[action.to] += 1;
+            }
+        } else {
+            if action.from == BAR {
+                bar.1 -= 1;
+            } else {
+                board[action.from] += 1;
+            }
+
+            if action.to == OFF {
+                off.1 += 1;
+            } else if board[action.to] == 1 {
+                board[action.to] = -1;
+                bar.0 += 1;
+            } else {
+                board[action.to] -= 1;
+            }
+        }
+
+        State {
+            board: board,
+            bar: bar,
+            off: off,
+            is_white: !self.is_white,
         }
     }
 
