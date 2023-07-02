@@ -1,29 +1,26 @@
 use base64::{engine::general_purpose, Engine as _};
 use std::{
+    cmp::max,
     fmt::{Display, Formatter, Result},
     ops::Add,
+    vec,
 };
+
+const WHITE: bool = true;
+const BLACK: bool = false;
 
 const BAR: usize = 25;
 const OFF: usize = 24;
 
-#[derive(Clone, Debug)]
-pub struct State {
-    board: [i32; 24],
-    bar: (i32, i32),
-    off: (i32, i32),
-    is_white: bool,
-}
-
-#[derive(Clone, Debug)]
-pub struct Action {
+#[derive(Clone, Debug, Copy, PartialEq)]
+pub struct Step {
     pub from: usize,
     pub to: usize,
 }
 
-impl Action {
+impl Step {
     pub fn new(from: usize, to: usize) -> Self {
-        Action {
+        Step {
             from: from - 1,
             to: to - 1,
         }
@@ -34,89 +31,277 @@ impl Action {
         let mut ms = ms.split('/');
         let from = ms.next()?.parse::<usize>().ok()? - 1;
         let to = ms.next()?.parse::<usize>().ok()? - 1;
-        Some(Action { from, to })
+        Some(Step { from, to })
+    }
+}
+
+impl Display for Step {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        write!(f, "{}/{}", self.from + 1, self.to + 1)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Action {
+    steps: Vec<Step>,
+}
+
+impl Action {
+    pub fn new(steps: Vec<Step>) -> Self {
+        Action { steps }
+    }
+
+    pub fn from<S: Into<String>>(ms: S) -> Option<Self> {
+        let ms = ms.into();
+        let mut ms = ms.split(' ');
+        let mut steps = Vec::new();
+        for step in ms {
+            steps.push(Step::from(step)?);
+        }
+        Some(Action { steps })
+    }
+
+    pub fn len(&self) -> usize {
+        self.steps.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.steps.is_empty()
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &Step> {
+        self.steps.iter()
     }
 }
 
 impl Display for Action {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        write!(f, "{}/{}", self.from + 1, self.to + 1)
+        let mut steps = self.steps.iter();
+        let mut prev = steps.next().unwrap().clone();
+
+        for step in steps {
+            if step.from == prev.to {
+                prev.to = step.to;
+            } else {
+                write!(f, "{} ", prev)?;
+                prev = step.clone();
+            }
+        }
+        write!(f, "{}", prev)
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct Tree {
+    pub step: Step,
+    pub children: Vec<Tree>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct State {
+    board: [i32; 24],
+    bar: (i32, i32),
+    off: (i32, i32),
+    is_white: bool,
 }
 
 impl State {
     pub fn new() -> Self {
         State {
             board: [
-                -2, 0, 0, 0, 0, 5, // Player on roll's home board (points 1-6)
-                0, 3, 0, 0, 0, -5, // Player on roll's outer board (points 7-12)
-                5, 0, 0, 0, -3, 0, // Player not on roll's outer board (points 13-18)
-                -5, 0, 0, 0, 0, 2, // Player not on roll's home board (points 19-24)
+                -2, 0, 0, 0, 0, 5, // Actioner on roll's home board (points 1-6)
+                0, 3, 0, 0, 0, -5, // Actioner on roll's outer board (points 7-12)
+                5, 0, 0, 0, -3, 0, // Actioner not on roll's outer board (points 13-18)
+                -5, 0, 0, 0, 0, 2, // Actioner not on roll's home board (points 19-24)
             ],
             bar: (0, 0),
             off: (0, 0),
-            is_white: true,
+            is_white: WHITE,
         }
+    }
+
+    pub fn action_from<S: Into<String>>(&self, ms: S, dice: (usize, usize)) -> Option<Action> {
+        let ms = ms.into();
+        for action in self.possible_actions(dice) {
+            if action.to_string() == ms {
+                return Some(action);
+            }
+        }
+        None
     }
 
     #[inline]
-    fn bar(&self, player: bool) -> i32 {
-        match player {
-            true => self.bar.0,
-            false => self.bar.1,
-        }
-    }
-
-    #[inline]
-    fn off(&self, player: bool) -> i32 {
-        match player {
-            true => self.off.0,
-            false => self.off.1,
-        }
-    }
-
-    pub fn apply_action(&self, action: Action) -> State {
-        let mut board = self.board.clone();
-        let mut bar = self.bar;
-        let mut off = self.off;
-
+    fn next_point(&self, point: usize) -> usize {
         if self.is_white {
-            if action.from == BAR {
-                bar.0 -= 1;
+            point - 1
+        } else {
+            point + 1
+        }
+    }
+
+    #[inline]
+    pub fn dest(start: usize, delta: usize, player: bool) -> isize {
+        if player {
+            start as isize - delta as isize
+        } else {
+            start as isize + delta as isize
+        }
+    }
+
+    pub fn valid(&self, to: isize) -> bool {
+        if 0 > to || to > 23 {
+            return false;
+        }
+        if self.board[to as usize] == 0 {
+            return true;
+        }
+
+        (self.board[to as usize] > 0) == self.is_white
+    }
+
+    pub fn pieces_from(&self, start: usize, player: bool) -> Vec<usize> {
+        if player {
+            (0..=start)
+                .rev()
+                .filter(|&point| self.board[point] > 0)
+                .collect()
+        } else {
+            (start..24).filter(|&point| self.board[point] < 0).collect()
+        }
+    }
+
+    pub fn possible_actions(&self, dice: (usize, usize)) -> Vec<Action> {
+        let mut trees = Vec::new();
+        let mut actions = Vec::new();
+
+        let mut depth = 0;
+
+        let from = if self.is_white { 23 } else { 0 };
+
+        if dice.0 == dice.1 {
+            let die = vec![dice.0, dice.0, dice.0, dice.0];
+            depth = self.clone().rec_actions(&mut trees, from, &die, true);
+            actions = Self::tree_actions(trees, Vec::new(), depth);
+        } else {
+            let die = vec![dice.0, dice.1];
+            depth = self.clone().rec_actions(&mut trees, from, &die, false);
+            // merge trees??
+            let die = vec![dice.1, dice.0];
+            depth = max(
+                depth,
+                self.clone().rec_actions(&mut trees, from, &die, true),
+            );
+            actions = Self::tree_actions(trees, Vec::new(), depth);
+            actions = Self::unique_actions(actions);
+        }
+        actions
+    }
+
+    fn rec_actions(
+        &mut self,
+        pap: &mut Vec<Tree>,
+        start: usize,
+        dice: &[usize],
+        jump: bool,
+    ) -> usize {
+        if dice.is_empty() {
+            return 0;
+        }
+
+        let mut deepest = 0;
+
+        let current_die = dice[0];
+
+        for from in self.pieces_from(start, self.is_white) {
+            let to = Self::dest(from, current_die, self.is_white);
+            if self.valid(to) {
+                let step = Step {
+                    from,
+                    to: to as usize,
+                };
+                let mut children = Vec::new();
+                let mut child = self.clone();
+                let next = if jump { self.next_point(from) } else { from };
+                child.apply_step(step);
+                let d = child.rec_actions(&mut children, next, &dice[1..], jump);
+                // self.undo_step(step);
+                deepest = max(deepest, d);
+                pap.push(Tree { step, children });
+            }
+        }
+        deepest + 1
+    }
+
+    fn tree_actions(trees: Vec<Tree>, history: Vec<Step>, depth: usize) -> Vec<Action> {
+        let mut plays = Vec::new();
+        for tree in trees {
+            let mut steps = history.clone();
+            steps.push(tree.step);
+            if tree.children.is_empty() && depth == 1 {
+                plays.push(Action { steps });
             } else {
-                board[action.from] -= 1;
+                plays.append(&mut Self::tree_actions(tree.children, steps, depth - 1));
+            }
+        }
+        plays
+    }
+
+    fn unique_actions(actions: Vec<Action>) -> Vec<Action> {
+        let mut unique = Vec::new();
+
+        for action in actions {
+            let mut steps = action.steps.iter();
+            let mut prev = steps.next().unwrap().clone();
+            let mut new_steps = Vec::new();
+            for step in steps {
+                if step.from == prev.to {
+                    prev.to = step.to;
+                } else {
+                    new_steps.push(prev.clone());
+                    prev = step.clone();
+                }
+            }
+            new_steps.push(prev.clone());
+            let new_action = Action { steps: new_steps };
+            if !unique.contains(&new_action) {
+                unique.push(new_action);
+            }
+        }
+
+        unique
+    }
+
+    fn apply_step(&mut self, play: Step) {
+        if self.is_white {
+            if play.from == BAR {
+                self.bar.0 -= 1;
+            } else {
+                self.board[play.from] -= 1;
             }
 
-            if action.to == OFF {
-                off.0 += 1;
-            } else if board[action.to] == -1 {
-                board[action.to] = 1;
-                bar.1 += 1;
+            if play.to == OFF {
+                self.off.0 += 1;
+            } else if self.board[play.to] == -1 {
+                self.board[play.to] = 1;
+                self.bar.1 += 1;
             } else {
-                board[action.to] += 1;
+                self.board[play.to] += 1;
             }
         } else {
-            if action.from == BAR {
-                bar.1 -= 1;
+            if play.from == BAR {
+                self.bar.1 -= 1;
             } else {
-                board[action.from] += 1;
+                self.board[play.from] += 1;
             }
 
-            if action.to == OFF {
-                off.1 += 1;
-            } else if board[action.to] == 1 {
-                board[action.to] = -1;
-                bar.0 += 1;
+            if play.to == OFF {
+                self.off.1 += 1;
+            } else if self.board[play.to] == 1 {
+                self.board[play.to] = -1;
+                self.bar.0 += 1;
             } else {
-                board[action.to] -= 1;
+                self.board[play.to] -= 1;
             }
-        }
-
-        State {
-            board: board,
-            bar: bar,
-            off: off,
-            is_white: !self.is_white,
         }
     }
 
@@ -299,6 +484,19 @@ mod tests {
         for pid in pids {
             let game = super::State::from_id(pid.to_string());
             assert_eq!(pid, game.position_id());
+        }
+    }
+
+    #[test]
+    fn pieces_from() {
+        let game = super::State::new();
+        for start in 0..24 {
+            game.pieces_from(start, super::WHITE)
+                .iter()
+                .for_each(|&piece| assert!(piece <= start));
+            game.pieces_from(start, super::BLACK)
+                .iter()
+                .for_each(|&piece| assert!(piece >= start));
         }
     }
 }
