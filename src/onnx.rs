@@ -1,7 +1,7 @@
 use crate::evaluator::{Evaluator, Probabilities};
 use crate::inputs::Inputs;
-use crate::position_finder;
 use bkgm::Position;
+use std::path::Path;
 use tract_onnx::prelude::*;
 
 pub struct OnnxEvaluator {
@@ -37,7 +37,7 @@ impl OnnxEvaluator {
         OnnxEvaluator::from_file_path("model/staffa.onnx")
     }
 
-    pub fn from_file_path(file_path: &str) -> Option<OnnxEvaluator> {
+    pub fn from_file_path(file_path: impl AsRef<Path>) -> Option<OnnxEvaluator> {
         match OnnxEvaluator::model(file_path) {
             Ok(model) => Some(OnnxEvaluator { model }),
             Err(_) => None,
@@ -74,7 +74,7 @@ impl OnnxEvaluator {
 
     #[allow(clippy::type_complexity)]
     fn model(
-        file_path: &str,
+        file_path: impl AsRef<Path>,
     ) -> TractResult<RunnableModel<TypedFact, Box<dyn TypedOp>, Graph<TypedFact, Box<dyn TypedOp>>>>
     {
         let model = onnx()

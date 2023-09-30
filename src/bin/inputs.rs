@@ -15,8 +15,12 @@ struct Args {
     /// Output file
     outfile: PathBuf,
 
+    /// Model file
+    #[arg(short = 'm', long = "model", default_value = "model/staffa.onnx")]
+    model: PathBuf,
+
     /// Separator
-    #[arg(short = 's', default_value = ",")]
+    #[arg(short = 's', long = "sep", default_value = ",")]
     sep: char, // TODO: Fix this to be a single byte and accept ;
 }
 
@@ -26,7 +30,7 @@ fn count_lines<R: io::Read>(reader: R) -> io::Result<usize> {
 }
 
 fn run(args: &Args) -> io::Result<()> {
-    let evaluator = OnnxEvaluator::from_file_path("model/staffa.onnx").unwrap();
+    let evaluator = OnnxEvaluator::from_file_path(&args.model).unwrap();
 
     let mut infile = File::open(&args.infile)?;
     let outfile = File::create(&args.outfile)?;
