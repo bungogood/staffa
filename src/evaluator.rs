@@ -6,12 +6,12 @@ use std::fmt::Formatter;
 /// Sum of all six fields will always be 1.0
 #[derive(PartialEq)]
 pub struct Probabilities {
-    pub(crate) win_normal: f32,
-    pub(crate) win_gammon: f32,
-    pub(crate) win_bg: f32,
-    pub(crate) lose_normal: f32,
-    pub(crate) lose_gammon: f32,
-    pub(crate) lose_bg: f32,
+    pub win_normal: f32,
+    pub win_gammon: f32,
+    pub win_bg: f32,
+    pub lose_normal: f32,
+    pub lose_gammon: f32,
+    pub lose_bg: f32,
 }
 
 impl fmt::Debug for Probabilities {
@@ -46,10 +46,6 @@ impl fmt::Display for Probabilities {
 }
 
 impl Probabilities {
-    pub fn csv_header() -> String {
-        "win_normal;win_gammon;win_bg;lose_normal;lose_gammon;lose_bg".to_string()
-    }
-
     /// Typically used from rollouts.
     /// The index within the array has to correspond to the discriminant of the `Probabilities` enum.
     /// Input integer values will be normalized so that the sum in the return value is 1.0

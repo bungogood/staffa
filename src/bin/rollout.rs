@@ -1,6 +1,5 @@
 use bkgm::Position;
 use staffa::evaluator::{Evaluator, Probabilities, RandomEvaluator};
-use staffa::inputs::Inputs;
 use staffa::onnx::OnnxEvaluator;
 use staffa::position_finder::PositionFinder;
 use staffa::rollout::RolloutEvaluator;
@@ -8,7 +7,8 @@ use std::fs::File;
 use std::io::{stdout, Write};
 use std::time::Instant;
 
-const AMOUNT: usize = 1_000;
+const AMOUNT: usize = 10;
+const SEP: &str = ",";
 
 fn main() -> std::io::Result<()> {
     let path = "data/rollouts.csv";
@@ -78,9 +78,31 @@ fn duration(seconds: u64) -> String {
 }
 
 fn csv_header() -> String {
-    Probabilities::csv_header() + ";" + Inputs::csv_header().as_str() + "\n"
+    let headers = vec![
+        "positionid",
+        "win_normal",
+        "win_gammon",
+        "win_bg",
+        "lose_normal",
+        "lose_gammon",
+        "lose_bg",
+    ];
+    headers.join(SEP) + "\n"
 }
 
-fn csv_line(position: &Position, probabilities: &Probabilities) -> String {
-    probabilities.to_string() + ";" + Inputs::from_position(position).to_string().as_str() + "\n"
+fn csv_line(position: &Position, prob: &Probabilities) -> String {
+    let probs = vec![
+        prob.win_normal,
+        prob.win_gammon,
+        prob.win_bg,
+        prob.lose_normal,
+        prob.lose_gammon,
+        prob.lose_bg,
+    ];
+    let probstr = probs
+        .iter()
+        .map(|f| format!("{:.5}", f))
+        .collect::<Vec<String>>()
+        .join(SEP);
+    position.position_id() + SEP + &probstr + "\n"
 }
