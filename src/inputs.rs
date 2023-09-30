@@ -1,4 +1,4 @@
-use crate::position::{Position, X_BAR};
+use bkgm::Position;
 use std::fmt;
 
 pub(crate) const NUM_INPUTS: usize = 202;
@@ -69,7 +69,7 @@ impl Inputs {
         x_inputs[0] = PipInput::from_pip(pos.x_bar());
         o_inputs[0] = PipInput::from_pip(pos.o_bar());
         // on the board:
-        for i in 1..X_BAR {
+        for i in 1..=24 {
             let pip = pos.pip(i);
             #[allow(clippy::comparison_chain)]
             if pip > 0 {
@@ -130,14 +130,13 @@ impl PipInput {
 #[cfg(test)]
 mod tests {
     use crate::inputs::{Inputs, NUM_INPUTS};
-    use crate::pos;
-    use crate::position::{Position, O_BAR};
+    use bkgm::{pos, Position, O_BAR};
     use std::collections::HashMap;
 
     #[test]
     fn inputs_display() {
         let pos = pos!(x 1:1, 2:2, 3:3, 4:4, 5:5; o 24:1, O_BAR: 1);
-        let pos_switched = pos.switch_sides();
+        let pos_switched = pos.flip();
         let inputs = Inputs::from_position(&pos);
         let inputs_switched = Inputs::from_position(&pos_switched);
         assert_eq!(
