@@ -4,3 +4,7 @@
 # Rust
 debug/
 target/
+
+# Project
+/data/
+/model/
