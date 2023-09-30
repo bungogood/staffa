@@ -1,5 +1,5 @@
 use bkgm::Position;
-use staffa::evaluator::{Evaluator, Probabilities, RandomEvaluator};
+use staffa::evaluator::{Evaluator, Probabilities};
 use staffa::onnx::OnnxEvaluator;
 use staffa::position_finder::PositionFinder;
 use staffa::rollout::RolloutEvaluator;
@@ -7,14 +7,16 @@ use std::fs::File;
 use std::io::{stdout, Write};
 use std::time::Instant;
 
+const DATA_DIR: &str = "data";
+
 const AMOUNT: usize = 10;
 const SEP: &str = ",";
 
 fn main() -> std::io::Result<()> {
-    let path = "data/rollouts.csv";
+    let path = format!("{}/rollouts.csv", DATA_DIR);
     println!("Roll out and write CSV data to {}", path);
-    _ = std::fs::create_dir("data");
-    _ = std::fs::remove_file(path);
+    _ = std::fs::create_dir(DATA_DIR);
+    _ = std::fs::remove_file(&path);
     let mut file = File::create(path)?;
     file.write_all(csv_header().as_bytes())?;
 
@@ -32,16 +34,7 @@ fn main() -> std::io::Result<()> {
                 write_csv_line(&mut file, position, &probabilities, i, start)?;
             }
         }
-        (_, _) => {
-            println!("Couldn't find onnx file, use random evaluator");
-            let evaluator = RolloutEvaluator::with_evaluator(RandomEvaluator {});
-            let mut finder = PositionFinder::new(RandomEvaluator {});
-            let positions = finder.find_positions(AMOUNT);
-            for (i, position) in positions.iter().enumerate() {
-                let probabilities = evaluator.eval(position);
-                write_csv_line(&mut file, position, &probabilities, i, start)?;
-            }
-        }
+        (_, _) => panic!("Could not load onnx evaluator"),
     }
     println!("\nDone!");
     Ok(())

@@ -1,5 +1,4 @@
 use staffa::duel::Duel;
-use staffa::evaluator::RandomEvaluator;
 use staffa::onnx::OnnxEvaluator;
 use std::io::{stdout, Write};
 

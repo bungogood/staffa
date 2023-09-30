@@ -34,7 +34,7 @@ fn perft_rec(depth: usize, position: &Position) -> u64 {
         let children = position.all_positions_after_moving(&die);
         for child in children {
             count += match child.game_state() {
-                Ongoing => perft_rec(depth - 1, &position),
+                Ongoing => perft_rec(depth - 1, position),
                 GameOver(_) => 1,
             };
         }
@@ -50,7 +50,7 @@ fn perft_position(depth: usize, position: &Position, verbose: bool) -> u64 {
         let children = position.all_positions_after_moving(&die);
         for child in children {
             count += match child.game_state() {
-                Ongoing => perft_rec(depth - 1, &position),
+                Ongoing => perft_rec(depth - 1, position),
                 GameOver(_) => 1,
             };
         }
