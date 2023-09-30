@@ -7,6 +7,9 @@ edition = "2021"
 
 [dependencies]
 bkgm = { path = "../bkgm" }
+clap = {version = "4.4.6", features = ["derive"]}
+csv = "1.2.2"
 fastrand = "2.0.0"
+indicatif = "0.17.7"
 rayon = "1.8.0"
 tract-onnx = "0.20.18"

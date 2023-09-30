@@ -1,5 +1,6 @@
 use crate::evaluator::{Evaluator, Probabilities};
 use crate::inputs::Inputs;
+use crate::position_finder;
 use bkgm::Position;
 use tract_onnx::prelude::*;
 
@@ -33,7 +34,7 @@ impl Evaluator for OnnxEvaluator {
 
 impl OnnxEvaluator {
     pub fn with_default_model() -> Option<Self> {
-        OnnxEvaluator::from_file_path("neural-nets/wildbg.onnx")
+        OnnxEvaluator::from_file_path("model/staffa.onnx")
     }
 
     pub fn from_file_path(file_path: &str) -> Option<OnnxEvaluator> {
@@ -41,6 +42,34 @@ impl OnnxEvaluator {
             Ok(model) => Some(OnnxEvaluator { model }),
             Err(_) => None,
         }
+    }
+
+    pub fn inputs(&self, position: &Position) -> Vec<f32> {
+        let inputs = Inputs::from_position(position);
+        inputs.to_vec()
+    }
+
+    pub fn input_labels(&self) -> Vec<String> {
+        let mut labels = vec![];
+        labels.push("x_off".to_string());
+        labels.push("o_off".to_string());
+        for case in 1..=4 {
+            labels.push(format!("x_bar-{}", case));
+        }
+        for pip in 1..=24 {
+            for case in 1..=4 {
+                labels.push(format!("x{}-{}", pip, case));
+            }
+        }
+        for case in 1..=4 {
+            labels.push(format!("o_bar-{}", case));
+        }
+        for pip in 1..=24 {
+            for case in 1..=4 {
+                labels.push(format!("o{}-{}", pip, case));
+            }
+        }
+        labels
     }
 
     #[allow(clippy::type_complexity)]
