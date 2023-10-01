@@ -29,7 +29,7 @@ struct Args {
 
 fn run(args: &Args) -> io::Result<()> {
     // add error handling
-    let evaluator = OnnxEvaluator::from_file_path(&args.model).unwrap();
+    let evaluator = OnnxEvaluator::from_file_path(&args.model).expect("Model not found");
 
     let mut headers = vec!["positionid".to_string()];
     headers.extend(evaluator.output_labels());

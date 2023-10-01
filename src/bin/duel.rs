@@ -22,8 +22,8 @@ struct Args {
 }
 
 fn run(args: &Args) {
-    let evaluator1 = OnnxEvaluator::from_file_path(&args.model1).unwrap();
-    let evaluator2 = OnnxEvaluator::from_file_path(&args.model2).unwrap();
+    let evaluator1 = OnnxEvaluator::from_file_path(&args.model1).expect("Model not found");
+    let evaluator2 = OnnxEvaluator::from_file_path(&args.model2).expect("Model not found");
     let mut duel = Duel::new(evaluator1, evaluator2);
 
     // TODO: play args.matches games and print the results
