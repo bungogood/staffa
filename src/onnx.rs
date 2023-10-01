@@ -4,6 +4,7 @@ use bkgm::Position;
 use std::path::Path;
 use tract_onnx::prelude::*;
 
+#[derive(Clone)]
 pub struct OnnxEvaluator {
     #[allow(clippy::type_complexity)]
     model: RunnableModel<TypedFact, Box<dyn TypedOp>, Graph<TypedFact, Box<dyn TypedOp>>>,
@@ -49,6 +50,20 @@ impl OnnxEvaluator {
         inputs.to_vec()
     }
 
+    pub fn outputs(&self, position: &Position) -> Vec<f32> {
+        let inputs = self.inputs(position);
+        let tract_inputs = tract_ndarray::Array1::from_vec(inputs)
+            .into_shape([1, crate::inputs::NUM_INPUTS])
+            .unwrap();
+        let tensor = tract_inputs.into_tensor();
+
+        // run the model on the input
+        let result = self.model.run(tvec!(tensor.into())).unwrap();
+        let array_view = result[0].to_array_view::<f32>().unwrap();
+        let result_vec: Vec<&f32> = array_view.iter().collect();
+        result_vec.iter().map(|f| **f).collect()
+    }
+
     pub fn input_labels(&self) -> Vec<String> {
         let mut labels = vec![];
         labels.push("x_off".to_string());
@@ -70,6 +85,18 @@ impl OnnxEvaluator {
             }
         }
         labels
+    }
+
+    pub fn output_labels(&self) -> Vec<String> {
+        let labels = vec![
+            "win_normal",
+            "win_gammon",
+            "win_bg",
+            "lose_normal",
+            "lose_gammon",
+            "lose_bg",
+        ];
+        labels.iter().map(|s| s.to_string()).collect()
     }
 
     #[allow(clippy::type_complexity)]

@@ -78,6 +78,17 @@ impl Probabilities {
             + 2.0 * (self.win_gammon - self.lose_gammon)
             + 3.0 * (self.win_bg - self.lose_bg)
     }
+
+    pub fn to_vec(&self) -> Vec<f32> {
+        vec![
+            self.win_normal,
+            self.win_gammon,
+            self.win_bg,
+            self.lose_normal,
+            self.lose_gammon,
+            self.lose_bg,
+        ]
+    }
 }
 
 pub trait Evaluator {
