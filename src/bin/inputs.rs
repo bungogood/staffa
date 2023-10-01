@@ -26,7 +26,7 @@ struct Args {
 
 fn count_lines<R: io::Read>(reader: R) -> io::Result<usize> {
     let buf_reader = BufReader::new(reader);
-    Ok(buf_reader.lines().count())
+    Ok(buf_reader.lines().count() - 1)
 }
 
 fn run(args: &Args) -> io::Result<()> {
@@ -35,7 +35,7 @@ fn run(args: &Args) -> io::Result<()> {
     let mut infile = File::open(&args.infile)?;
     let outfile = File::create(&args.outfile)?;
 
-    let total_lines = count_lines(&infile)?;
+    let position_count = count_lines(&infile)?;
     infile.seek(io::SeekFrom::Start(0))?; // Reset file position to the beginning.
 
     let mut rdr = csv::ReaderBuilder::new()
@@ -46,10 +46,12 @@ fn run(args: &Args) -> io::Result<()> {
         .delimiter(args.sep as u8)
         .from_writer(outfile);
 
-    let pb = ProgressBar::new(total_lines as u64);
+    let pb = ProgressBar::new(position_count as u64);
     pb.set_style(
         ProgressStyle::default_bar()
-            .template("{wide_bar} {pos}/{len} ({percent}%)")
+            .template(
+                "{wide_bar} {pos}/{len} ({percent}%) Elapsed: {elapsed_precise} ETA: {eta_precise}",
+            )
             .unwrap(),
     );
 
@@ -74,7 +76,11 @@ fn run(args: &Args) -> io::Result<()> {
         wtr.write_record(data)?;
         pb.inc(1);
     }
+
     pb.finish_and_clear();
+    let dur = pb.elapsed();
+    println!("Positions: {}", position_count);
+    println!("Elapsed: {:.2?}", dur);
     Ok(())
 }
 
