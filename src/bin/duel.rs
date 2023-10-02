@@ -1,6 +1,6 @@
 use clap::Parser;
 use staffa::duel::Duel;
-use staffa::onnx::OnnxEvaluator;
+use staffa::evaluator::OnnxEvaluator;
 use std::{
     io::{stdout, Write},
     path::PathBuf,

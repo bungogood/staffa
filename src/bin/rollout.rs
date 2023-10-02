@@ -1,12 +1,13 @@
 use clap::Parser;
 use indicatif::{ProgressBar, ProgressStyle};
-use staffa::evaluator::Evaluator;
-use staffa::onnx::OnnxEvaluator;
+use staffa::evaluator::{Evaluator, OnnxEvaluator};
 use staffa::position_finder::PositionFinder;
 use staffa::rollout::RolloutEvaluator;
 use std::fs::File;
 use std::io;
 use std::path::PathBuf;
+
+/// Generate positions and evaluate for training
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]

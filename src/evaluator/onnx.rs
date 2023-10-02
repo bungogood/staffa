@@ -17,8 +17,6 @@ impl Evaluator for OnnxEvaluator {
             .into_shape([1, crate::inputs::NUM_INPUTS])
             .unwrap();
         let tensor = tract_inputs.into_tensor();
-
-        // run the model on the input
         let result = self.model.run(tvec!(tensor.into())).unwrap();
         let array_view = result[0].to_array_view::<f32>().unwrap();
         let result_vec: Vec<&f32> = array_view.iter().collect();
@@ -115,8 +113,8 @@ impl OnnxEvaluator {
 /// The following tests mainly test the quality of the neural nets
 #[cfg(test)]
 mod tests {
-    use crate::evaluator::Evaluator;
-    use crate::onnx::OnnxEvaluator;
+    use super::super::Evaluator;
+    use super::OnnxEvaluator;
     use bkgm::{pos, Position};
     use std::collections::HashMap;
 

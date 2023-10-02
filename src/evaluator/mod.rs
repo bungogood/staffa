@@ -1,7 +1,13 @@
-use bkgm::GameResult::{LoseBg, LoseGammon, LoseNormal, WinBg, WinGammon, WinNormal};
+use bkgm::GameResult::{self, LoseBg, LoseGammon, LoseNormal, WinBg, WinGammon, WinNormal};
 use bkgm::{Dice, Position};
 use std::fmt;
 use std::fmt::Formatter;
+use std::ops::Add;
+
+mod ply;
+pub use ply::PlyEvaluator;
+mod onnx;
+pub use onnx::OnnxEvaluator;
 
 /// Sum of all six fields will always be 1.0
 #[derive(PartialEq)]
@@ -45,6 +51,21 @@ impl fmt::Display for Probabilities {
     }
 }
 
+impl Add for Probabilities {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Probabilities {
+            win_normal: self.win_normal + rhs.win_normal,
+            win_gammon: self.win_gammon + rhs.win_gammon,
+            win_bg: self.win_bg + rhs.win_bg,
+            lose_normal: self.lose_normal + rhs.lose_normal,
+            lose_gammon: self.lose_gammon + rhs.lose_gammon,
+            lose_bg: self.lose_bg + rhs.lose_bg,
+        }
+    }
+}
+
 impl Probabilities {
     /// Typically used from rollouts.
     /// The index within the array has to correspond to the discriminant of the `Probabilities` enum.
@@ -58,6 +79,82 @@ impl Probabilities {
             lose_normal: results[LoseNormal as usize] as f32 / sum,
             lose_gammon: results[LoseGammon as usize] as f32 / sum,
             lose_bg: results[LoseBg as usize] as f32 / sum,
+        }
+    }
+
+    pub fn blank() -> Self {
+        Probabilities {
+            win_normal: 0.0,
+            win_gammon: 0.0,
+            win_bg: 0.0,
+            lose_normal: 0.0,
+            lose_gammon: 0.0,
+            lose_bg: 0.0,
+        }
+    }
+
+    pub fn from(results: &GameResult) -> Self {
+        match results {
+            WinNormal => Self {
+                win_normal: 1.0,
+                win_gammon: 0.0,
+                win_bg: 0.0,
+                lose_normal: 0.0,
+                lose_gammon: 0.0,
+                lose_bg: 0.0,
+            },
+            WinGammon => Self {
+                win_normal: 0.0,
+                win_gammon: 1.0,
+                win_bg: 0.0,
+                lose_normal: 0.0,
+                lose_gammon: 0.0,
+                lose_bg: 0.0,
+            },
+            WinBg => Self {
+                win_normal: 0.0,
+                win_gammon: 0.0,
+                win_bg: 1.0,
+                lose_normal: 0.0,
+                lose_gammon: 0.0,
+                lose_bg: 0.0,
+            },
+            LoseNormal => Self {
+                win_normal: 0.0,
+                win_gammon: 0.0,
+                win_bg: 1.0,
+                lose_normal: 1.0,
+                lose_gammon: 0.0,
+                lose_bg: 0.0,
+            },
+            LoseGammon => Self {
+                win_normal: 0.0,
+                win_gammon: 0.0,
+                win_bg: 0.0,
+                lose_normal: 0.0,
+                lose_gammon: 1.0,
+                lose_bg: 0.0,
+            },
+            LoseBg => Self {
+                win_normal: 0.0,
+                win_gammon: 0.0,
+                win_bg: 0.0,
+                lose_normal: 0.0,
+                lose_gammon: 0.0,
+                lose_bg: 1.0,
+            },
+        }
+    }
+
+    pub fn normalized(&self) -> Self {
+        let sum = self.to_vec().iter().sum::<f32>();
+        Probabilities {
+            win_normal: self.win_normal / sum,
+            win_gammon: self.win_gammon / sum,
+            win_bg: self.win_bg / sum,
+            lose_normal: self.lose_normal / sum,
+            lose_gammon: self.lose_gammon / sum,
+            lose_bg: self.lose_bg / sum,
         }
     }
 
@@ -161,6 +258,13 @@ impl Evaluator for RandomEvaluator {
             lose_gammon: lose_gammon / sum,
             lose_bg: lose_bg / sum,
         }
+    }
+}
+
+impl RandomEvaluator {
+    #[allow(dead_code)]
+    pub fn new() -> RandomEvaluator {
+        RandomEvaluator {}
     }
 }
 

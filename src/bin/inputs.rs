@@ -1,7 +1,7 @@
 use bkgm::Position;
 use clap::Parser;
 use indicatif::{ProgressBar, ProgressStyle};
-use staffa::onnx::OnnxEvaluator;
+use staffa::evaluator::OnnxEvaluator;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, Seek};
 use std::path::PathBuf;
