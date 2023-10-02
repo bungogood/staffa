@@ -86,7 +86,7 @@ impl OnnxEvaluator {
     }
 
     pub fn output_labels(&self) -> Vec<String> {
-        let labels = vec![
+        let labels = [
             "win_normal",
             "win_gammon",
             "win_bg",

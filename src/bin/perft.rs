@@ -41,7 +41,7 @@ fn perft_rec(depth: usize, position: &Position) -> u64 {
 }
 
 fn perft(args: &Args) {
-    let position = Position::from_id(args.position.clone()).expect("Invalid position");
+    let position = Position::from_id(&args.position).expect("Invalid position");
     let mut total = 0;
     for (die, _) in ALL_21 {
         let mut count = 0;

@@ -69,7 +69,7 @@ fn run(args: &Args) -> io::Result<()> {
         let line = line?;
         let mut line_iter = line.iter();
         let pid = line_iter.next().unwrap();
-        let position = Position::from_id(pid.to_string()).expect("Invalid position id");
+        let position = Position::from_id(&pid.to_string()).expect("Invalid position id");
         let inputs = evaluator.inputs(&position);
         let mut data = line_iter.map(|f| f.to_string()).collect::<Vec<String>>();
         data.extend(inputs.iter().map(|f| f.to_string()));

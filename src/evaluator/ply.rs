@@ -26,7 +26,7 @@ impl<T: Evaluator> PlyEvaluator<T> {
     pub fn ply(&self, pos: &Position, depth: usize) -> Probabilities {
         let mut probs = Probabilities::blank();
         for (dice, n) in ALL_21 {
-            let best = self.evaluator.best_position(&pos, &dice);
+            let best = self.evaluator.best_position(pos, &dice);
             let nprob = self.evaluator.eval(&best);
             probs = Probabilities {
                 win_normal: probs.win_normal + nprob.win_normal * n,
