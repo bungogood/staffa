@@ -2,12 +2,15 @@ use bkgm::GameResult::{self, LoseBg, LoseGammon, LoseNormal, WinBg, WinGammon, W
 use bkgm::{Dice, Position};
 use std::fmt;
 use std::fmt::Formatter;
-use std::ops::Add;
 
-mod ply;
-pub use ply::PlyEvaluator;
+mod hyper;
 mod onnx;
+mod ply;
+mod pubeval;
+pub use hyper::HyperEvaluator;
 pub use onnx::OnnxEvaluator;
+pub use ply::PlyEvaluator;
+pub use pubeval::PubEval;
 
 /// Sum of all six fields will always be 1.0
 #[derive(PartialEq)]
@@ -51,21 +54,6 @@ impl fmt::Display for Probabilities {
     }
 }
 
-impl Add for Probabilities {
-    type Output = Self;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        Probabilities {
-            win_normal: self.win_normal + rhs.win_normal,
-            win_gammon: self.win_gammon + rhs.win_gammon,
-            win_bg: self.win_bg + rhs.win_bg,
-            lose_normal: self.lose_normal + rhs.lose_normal,
-            lose_gammon: self.lose_gammon + rhs.lose_gammon,
-            lose_bg: self.lose_bg + rhs.lose_bg,
-        }
-    }
-}
-
 impl Probabilities {
     /// Typically used from rollouts.
     /// The index within the array has to correspond to the discriminant of the `Probabilities` enum.
@@ -79,17 +67,6 @@ impl Probabilities {
             lose_normal: results[LoseNormal as usize] as f32 / sum,
             lose_gammon: results[LoseGammon as usize] as f32 / sum,
             lose_bg: results[LoseBg as usize] as f32 / sum,
-        }
-    }
-
-    pub fn blank() -> Self {
-        Probabilities {
-            win_normal: 0.0,
-            win_gammon: 0.0,
-            win_bg: 0.0,
-            lose_normal: 0.0,
-            lose_gammon: 0.0,
-            lose_bg: 0.0,
         }
     }
 
@@ -192,7 +169,7 @@ pub trait Evaluator {
     /// Returns a cubeless evaluation of a position.
     /// Implementing types will calculate the probabilities with different strategies.
     /// Examples of such strategies are a rollout or 1-ply inference of a neural net.
-    fn eval(&self, pos: &Position) -> Probabilities;
+    fn eval(&self, pos: &Position) -> f32;
 
     /// Returns the position after applying the *best* move to `pos`.
     /// The returned `Position` has already switches sides.
@@ -206,32 +183,10 @@ pub trait Evaluator {
     fn worst_position<'a>(&'a self, positions: &'a [Position]) -> &Position {
         positions
             .iter()
-            .map(|pos| (pos, self.eval(pos).equity()))
+            .map(|pos| (pos, self.eval(pos)))
             .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
             .unwrap()
             .0
-    }
-
-    /// All legal positions after moving with the given dice.
-    /// Sorted, the best move/position is first in the vector.
-    /// The positions are again from the perspective of player `x`.
-    /// The probabilities have switched sides, so they are from the perspective of player `x` who has to move.
-    fn positions_and_probabilities_by_equity(
-        &self,
-        position: &Position,
-        dice: &Dice,
-    ) -> Vec<(Position, Probabilities)> {
-        let after_moving = position.all_positions_after_moving(dice);
-        let mut pos_and_probs: Vec<(Position, Probabilities)> = after_moving
-            .into_iter()
-            .map(|pos| {
-                let probabilities = self.eval(&pos).switch_sides();
-                let pos = pos.flip();
-                (pos, probabilities)
-            })
-            .collect();
-        pos_and_probs.sort_unstable_by(|a, b| b.1.equity().partial_cmp(&a.1.equity()).unwrap());
-        pos_and_probs
     }
 }
 
@@ -240,24 +195,8 @@ pub struct RandomEvaluator {}
 impl Evaluator for RandomEvaluator {
     #[allow(dead_code)]
     /// Returns random probabilities. Each call will return different values.
-    fn eval(&self, _pos: &Position) -> Probabilities {
-        let win_normal = fastrand::f32();
-        let win_gammon = fastrand::f32();
-        let win_bg = fastrand::f32();
-        let lose_normal = fastrand::f32();
-        let lose_gammon = fastrand::f32();
-        let lose_bg = fastrand::f32();
-
-        // Now we like to make sure that the different probabilities add up to 1
-        let sum = win_normal + win_gammon + win_bg + lose_normal + lose_gammon + lose_bg;
-        Probabilities {
-            win_normal: win_normal / sum,
-            win_gammon: win_gammon / sum,
-            win_bg: win_bg / sum,
-            lose_normal: lose_normal / sum,
-            lose_gammon: lose_gammon / sum,
-            lose_bg: lose_bg / sum,
-        }
+    fn eval(&self, _pos: &Position) -> f32 {
+        fastrand::f32()
     }
 }
 
@@ -394,7 +333,7 @@ mod probabilities_tests {
 }
 #[cfg(test)]
 mod evaluator_trait_tests {
-    use crate::evaluator::{Evaluator, Probabilities};
+    use crate::evaluator::Evaluator;
     use bkgm::{pos, Dice, Position};
     use std::collections::HashMap;
 
@@ -405,25 +344,11 @@ mod evaluator_trait_tests {
     /// Test double. Returns not so good probabilities for `expected_pos`, better for everything else.
     struct EvaluatorFake {}
     impl Evaluator for EvaluatorFake {
-        fn eval(&self, pos: &Position) -> Probabilities {
+        fn eval(&self, pos: &Position) -> f32 {
             if pos == &expected_pos() {
-                Probabilities {
-                    win_normal: 0.5,
-                    win_gammon: 0.1,
-                    win_bg: 0.1,
-                    lose_normal: 0.1,
-                    lose_gammon: 0.1,
-                    lose_bg: 0.1,
-                }
+                1.0
             } else {
-                Probabilities {
-                    win_normal: 0.4,
-                    win_gammon: 0.2,
-                    win_bg: 0.1,
-                    lose_normal: 0.1,
-                    lose_gammon: 0.1,
-                    lose_bg: 0.1,
-                }
+                -1.0
             }
         }
     }
@@ -437,37 +362,5 @@ mod evaluator_trait_tests {
         let best_pos = evaluator.best_position(&given_pos, &Dice::new(4, 2));
         // Then
         assert_eq!(best_pos, expected_pos());
-    }
-
-    #[test]
-    fn positions_and_probabilities_by_equity() {
-        // Given
-        let given_pos = pos!(x 7:2; o 20:2);
-        let evaluator = EvaluatorFake {};
-        // When
-        let values = evaluator.positions_and_probabilities_by_equity(&given_pos, &Dice::new(4, 2));
-        // Then
-        let (best_pos, best_probability) = values.first().unwrap();
-        let best_pos = best_pos.flip();
-        assert_eq!(
-            &best_pos,
-            &evaluator.best_position(&given_pos, &Dice::new(4, 2))
-        );
-        assert_eq!(best_probability.switch_sides(), evaluator.eval(&best_pos));
-    }
-}
-
-#[cfg(test)]
-mod random_evaluator_tests {
-    use crate::evaluator::{Evaluator, RandomEvaluator};
-    use bkgm::Position;
-
-    #[test]
-    fn sum_is_1() {
-        let evaluator = RandomEvaluator {};
-        let p = evaluator.eval(&Position::new());
-        let sum =
-            p.win_normal + p.win_gammon + p.win_bg + p.lose_normal + p.lose_gammon + p.lose_bg;
-        assert!((sum - 1.0).abs() < 0.0001);
     }
 }

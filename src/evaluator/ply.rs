@@ -9,10 +9,10 @@ pub struct PlyEvaluator<T: Evaluator> {
 }
 
 impl<T: Evaluator + Sync> Evaluator for PlyEvaluator<T> {
-    fn eval(&self, pos: &Position) -> Probabilities {
+    fn eval(&self, pos: &Position) -> f32 {
         match pos.game_state() {
             bkgm::GameState::Ongoing => self.ply(pos, self.depth),
-            bkgm::GameState::GameOver(result) => Probabilities::from(&result),
+            bkgm::GameState::GameOver(result) => result.value(),
         }
     }
 }
@@ -23,20 +23,12 @@ impl<T: Evaluator> PlyEvaluator<T> {
     }
 
     // TODO: Implement N ply
-    pub fn ply(&self, pos: &Position, depth: usize) -> Probabilities {
-        let mut probs = Probabilities::blank();
+    pub fn ply(&self, pos: &Position, depth: usize) -> f32 {
+        let mut score = 0.0;
         for (dice, n) in ALL_21 {
             let best = self.evaluator.best_position(pos, &dice);
-            let nprob = self.evaluator.eval(&best);
-            probs = Probabilities {
-                win_normal: probs.win_normal + nprob.win_normal * n,
-                win_gammon: probs.win_gammon + nprob.win_gammon * n,
-                win_bg: probs.win_bg + nprob.win_bg * n,
-                lose_normal: probs.lose_normal + nprob.lose_normal * n,
-                lose_gammon: probs.lose_gammon + nprob.lose_gammon * n,
-                lose_bg: probs.lose_bg + nprob.lose_bg * n,
-            }
+            score += n * self.evaluator.eval(&best);
         }
-        probs.normalized().switch_sides()
+        score / 36.0
     }
 }

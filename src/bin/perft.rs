@@ -1,5 +1,5 @@
 use bkgm::{
-    dice::ALL_21,
+    dice::{ALL_21, ALL_SINGLES},
     GameState::{GameOver, Ongoing},
     Position,
 };
@@ -40,10 +40,13 @@ fn perft_rec(depth: usize, position: &Position) -> u64 {
     count
 }
 
-fn perft(args: &Args) {
+fn perft(args: &Args) -> u64 {
     let position = Position::from_id(&args.position).expect("Invalid position");
+    if args.verbose {
+        position.show();
+    }
     let mut total = 0;
-    for (die, _) in ALL_21 {
+    for die in ALL_SINGLES {
         let mut count = 0;
         let children = position.all_positions_after_moving(&die);
         for child in children {
@@ -57,10 +60,35 @@ fn perft(args: &Args) {
         }
         total += count;
     }
-    println!("Total: {}", total);
+    total
 }
 
 fn main() {
     let args = Args::parse();
-    perft(&args);
+    let start = std::time::Instant::now();
+    let total = perft(&args);
+    let dur = start.elapsed();
+    let speed = total as f64 / dur.as_secs_f64();
+    let avg_time = dur / total as u32;
+    println!("Total: {}", total);
+    println!(
+        "Elapsed: {:.2?} Speed: {:.2}/s, Avg: {:.2?}",
+        dur, speed, avg_time
+    );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_perft() {
+        let args = Args {
+            depth: 2,
+            position: "4HPwATDgc/ABMA".to_string(),
+            verbose: false,
+        };
+        let total = perft(&args);
+        assert_eq!(total, 447);
+    }
 }
