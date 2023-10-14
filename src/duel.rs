@@ -1,17 +1,20 @@
+use std::marker::PhantomData;
+
 use crate::dice::{DiceGen, FastrandDice};
 use crate::evaluator::{Evaluator, Probabilities};
 use bkgm::GameState::{GameOver, Ongoing};
-use bkgm::Position;
+use bkgm::State;
 
-pub struct Duel<T: Evaluator, U: Evaluator> {
+pub struct Duel<T: Evaluator<G>, U: Evaluator<G>, G: State> {
     evaluator1: T,
     evaluator2: U,
     dice_gen: FastrandDice,
     results: [u32; 6],
+    phantom: PhantomData<G>,
 }
 
 /// Let two `Evaluator`s duel each other. A bit quick and dirty.
-impl<T: Evaluator, U: Evaluator> Duel<T, U> {
+impl<T: Evaluator<G>, U: Evaluator<G>, G: State> Duel<T, U, G> {
     #[allow(clippy::new_without_default)]
     pub fn new(evaluator1: T, evaluator2: U) -> Self {
         Self::with_dice_gen(evaluator1, evaluator2, FastrandDice::new())
@@ -23,6 +26,7 @@ impl<T: Evaluator, U: Evaluator> Duel<T, U> {
             evaluator2,
             dice_gen,
             results: [0; 6],
+            phantom: PhantomData,
         }
     }
 
@@ -37,8 +41,8 @@ impl<T: Evaluator, U: Evaluator> Duel<T, U> {
     /// The two `Evaluator`s will play twice each against each other.
     /// Either `Evaluator` will start once and play with the same dice as vice versa.
     pub fn duel_once(&mut self) {
-        let mut pos1 = Position::new();
-        let mut pos2 = Position::new();
+        let mut pos1 = G::new();
+        let mut pos2 = G::new();
         let mut iteration = 0;
         let mut pos1_finished = false;
         let mut pos2_finished = false;

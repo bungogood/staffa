@@ -1,18 +1,21 @@
 use crate::evaluator::{Evaluator, Probabilities};
 use crate::inputs::Inputs;
-use bkgm::Position;
+use std::marker::PhantomData;
 use std::path::Path;
 use tract_onnx::prelude::*;
 
+use super::State;
+
 #[derive(Clone)]
-pub struct OnnxEvaluator {
+pub struct OnnxEvaluator<G: State> {
     #[allow(clippy::type_complexity)]
     model: RunnableModel<TypedFact, Box<dyn TypedOp>, Graph<TypedFact, Box<dyn TypedOp>>>,
+    phantom: PhantomData<G>,
 }
 
-impl Evaluator for OnnxEvaluator {
-    fn eval(&self, position: &Position) -> f32 {
-        let inputs = Inputs::from_position(position).to_vec();
+impl<G: State> Evaluator<G> for OnnxEvaluator<G> {
+    fn eval(&self, position: &G) -> f32 {
+        let inputs = Inputs::from_position(&position.position()).to_vec();
         let tract_inputs = tract_ndarray::Array1::from_vec(inputs)
             .into_shape([1, crate::inputs::NUM_INPUTS])
             .unwrap();
@@ -32,24 +35,27 @@ impl Evaluator for OnnxEvaluator {
     }
 }
 
-impl OnnxEvaluator {
+impl<G: State> OnnxEvaluator<G> {
     pub fn with_default_model() -> Option<Self> {
         Self::from_file_path("model/staffa.onnx")
     }
 
     pub fn from_file_path(file_path: impl AsRef<Path>) -> Option<Self> {
         match Self::model(file_path) {
-            Ok(model) => Some(Self { model }),
+            Ok(model) => Some(Self {
+                model,
+                phantom: PhantomData,
+            }),
             Err(_) => None,
         }
     }
 
-    pub fn inputs(&self, position: &Position) -> Vec<f32> {
-        let inputs = Inputs::from_position(position);
+    pub fn inputs(&self, position: &G) -> Vec<f32> {
+        let inputs = Inputs::from_position(&position.position());
         inputs.to_vec()
     }
 
-    pub fn outputs(&self, position: &Position) -> Vec<f32> {
+    pub fn outputs(&self, position: &G) -> Vec<f32> {
         let inputs = self.inputs(position);
         let tract_inputs = tract_ndarray::Array1::from_vec(inputs)
             .into_shape([1, crate::inputs::NUM_INPUTS])
@@ -116,13 +122,12 @@ impl OnnxEvaluator {
 mod tests {
     use super::super::Evaluator;
     use super::OnnxEvaluator;
-    use bkgm::{pos, Position};
-    use std::collections::HashMap;
+    use bkgm::{bpos, Backgammon};
 
     #[test]
     fn eval_certain_win_normal() {
         let onnx = OnnxEvaluator::with_default_model().unwrap();
-        let position = pos![x 1:1; o 24:1];
+        let position = bpos![x 1:1; o 24:1];
 
         let probabilities = onnx.eval(&position);
         // assert!(probabilities.win_normal > 0.85);
@@ -132,7 +137,7 @@ mod tests {
     #[test]
     fn eval_certain_win_gammon() {
         let onnx = OnnxEvaluator::with_default_model().unwrap();
-        let position = pos![x 1:1; o 18:15];
+        let position = bpos![x 1:1; o 18:15];
 
         let probabilities = onnx.eval(&position);
         // assert!(probabilities.win_gammon > 0.85);
@@ -142,7 +147,7 @@ mod tests {
     #[test]
     fn eval_certain_win_bg() {
         let onnx = OnnxEvaluator::with_default_model().unwrap();
-        let position = pos![x 1:1; o 6:15];
+        let position = bpos![x 1:1; o 6:15];
 
         let probabilities = onnx.eval(&position);
         // assert!(probabilities.win_bg > 0.27);
@@ -152,7 +157,7 @@ mod tests {
     #[test]
     fn eval_certain_lose_normal() {
         let onnx = OnnxEvaluator::with_default_model().unwrap();
-        let position = pos![x 1:6; o 24:1];
+        let position = bpos![x 1:6; o 24:1];
 
         let probabilities = onnx.eval(&position);
         // assert!(probabilities.lose_normal > 0.77);
@@ -162,7 +167,7 @@ mod tests {
     #[test]
     fn eval_certain_lose_gammon() {
         let onnx = OnnxEvaluator::with_default_model().unwrap();
-        let position = pos![x 7:15; o 24:1];
+        let position = bpos![x 7:15; o 24:1];
 
         let probabilities = onnx.eval(&position);
         // assert!(probabilities.lose_gammon > 0.92);
@@ -172,7 +177,7 @@ mod tests {
     #[test]
     fn eval_certain_lose_bg() {
         let onnx = OnnxEvaluator::with_default_model().unwrap();
-        let position = pos![x 19:15; o 24:1];
+        let position = bpos![x 19:15; o 24:1];
 
         let probabilities = onnx.eval(&position);
         // assert!(probabilities.lose_bg > 0.02);

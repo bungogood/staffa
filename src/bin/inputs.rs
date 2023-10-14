@@ -1,4 +1,4 @@
-use bkgm::Position;
+use bkgm::{Backgammon, State};
 use clap::Parser;
 use indicatif::{ProgressBar, ProgressStyle};
 use staffa::evaluator::OnnxEvaluator;
@@ -30,7 +30,8 @@ fn count_lines<R: io::Read>(reader: R) -> io::Result<usize> {
 }
 
 fn run(args: &Args) -> io::Result<()> {
-    let evaluator = OnnxEvaluator::from_file_path(&args.model).expect("Model not found");
+    let evaluator =
+        OnnxEvaluator::<Backgammon>::from_file_path(&args.model).expect("Model not found");
 
     let mut infile = File::open(&args.infile)?;
     let outfile = File::create(&args.outfile)?;
@@ -69,7 +70,7 @@ fn run(args: &Args) -> io::Result<()> {
         let line = line?;
         let mut line_iter = line.iter();
         let pid = line_iter.next().unwrap();
-        let position = Position::from_id(&pid.to_string()).expect("Invalid position id");
+        let position = Backgammon::from_id(&pid.to_string()).expect("Invalid position id");
         let inputs = evaluator.inputs(&position);
         let mut data = line_iter.map(|f| f.to_string()).collect::<Vec<String>>();
         data.extend(inputs.iter().map(|f| f.to_string()));

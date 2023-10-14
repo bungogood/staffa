@@ -1,6 +1,7 @@
+use bkgm::Backgammon;
 use clap::Parser;
-use staffa::duel::Duel;
-use staffa::evaluator::OnnxEvaluator;
+use staffa::evaluator::{self, HyperEvaluator, OnnxEvaluator, RandomEvaluator};
+use staffa::{duel::Duel, evaluator::PubEval};
 use std::{
     io::{stdout, Write},
     path::PathBuf,
@@ -22,8 +23,12 @@ struct Args {
 }
 
 fn run(args: &Args) {
-    let evaluator1 = OnnxEvaluator::from_file_path(&args.model1).expect("Model not found");
+    // let evaluator1 = RandomEvaluator::new();
+    let evaluator1 =
+        OnnxEvaluator::<Backgammon>::from_file_path(&args.model1).expect("Model not found");
     let evaluator2 = OnnxEvaluator::from_file_path(&args.model2).expect("Model not found");
+    // let evaluator2 = PubEval::new();
+    // let evaluator2 = HyperEvaluator::new().unwrap();
     let mut duel = Duel::new(evaluator1, evaluator2);
 
     // TODO: play args.matches games and print the results

@@ -1,20 +1,23 @@
+use std::marker::PhantomData;
+
 use crate::dice::{DiceGen, FastrandDice};
 use crate::evaluator::{Evaluator, Probabilities, RandomEvaluator};
+use bkgm::State;
 use bkgm::{
     dice::ALL_1296,
     Dice, GameResult,
     GameState::{GameOver, Ongoing},
-    Position,
 };
 use rayon::prelude::*;
 
-pub struct RolloutEvaluator<T: Evaluator> {
-    evaluator: T,
+pub struct RolloutEvaluator<E: Evaluator<G>, G: State> {
+    evaluator: E,
+    phantom: PhantomData<G>,
 }
 
-impl<T: Evaluator + Sync> Evaluator for RolloutEvaluator<T> {
+impl<E: Evaluator<G> + Sync, G: State> Evaluator<G> for RolloutEvaluator<E, G> {
     /// Rolls out 1296 times, first two half moves are given, rest is random
-    fn eval(&self, pos: &Position) -> f32 {
+    fn eval(&self, pos: &G) -> f32 {
         debug_assert!(pos.game_state() == Ongoing);
         let dice = ALL_1296;
 
@@ -39,17 +42,18 @@ impl<T: Evaluator + Sync> Evaluator for RolloutEvaluator<T> {
     }
 }
 
-impl RolloutEvaluator<RandomEvaluator> {
+impl<G: State> RolloutEvaluator<RandomEvaluator, G> {
     pub fn new_random() -> Self {
-        RolloutEvaluator {
-            evaluator: RandomEvaluator {},
-        }
+        Self::with_evaluator(RandomEvaluator::new())
     }
 }
 
-impl<T: Evaluator> RolloutEvaluator<T> {
-    pub fn with_evaluator(evaluator: T) -> Self {
-        Self { evaluator }
+impl<E: Evaluator<G>, G: State> RolloutEvaluator<E, G> {
+    pub fn with_evaluator(evaluator: E) -> Self {
+        Self {
+            evaluator,
+            phantom: PhantomData,
+        }
     }
 
     /// `first_dice` contains the dice for first moves, starting at index 0. It may be empty.
@@ -57,7 +61,7 @@ impl<T: Evaluator> RolloutEvaluator<T> {
     #[allow(dead_code)]
     fn single_rollout<U: DiceGen>(
         &self,
-        from: &Position,
+        from: &G,
         first_dice: &[Dice],
         dice_gen: &mut U,
     ) -> GameResult {
@@ -89,17 +93,14 @@ impl<T: Evaluator> RolloutEvaluator<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::evaluator::{Evaluator, RandomEvaluator};
+    use crate::evaluator::Evaluator;
     use crate::rollout::RolloutEvaluator;
-    use bkgm::{pos, Position};
-    use std::collections::HashMap;
+    use bkgm::{bpos, Backgammon};
 
     #[test]
     fn correct_results_after_first_or_second_half_move() {
-        let rollout_eval = RolloutEvaluator {
-            evaluator: RandomEvaluator {},
-        };
-        let pos = pos!(x 6:1; o 19:1);
+        let rollout_eval = RolloutEvaluator::new_random();
+        let pos = bpos!(x 6:1; o 19:1);
 
         // From this position both players are only 6 pips (2 moves) away from finishing.
         // During a rollout each first move of each player is predetermined. If this first move
@@ -125,20 +126,16 @@ mod tests {
 
     #[test]
     fn rollout_always_lose_gammon() {
-        let rollout_eval = RolloutEvaluator {
-            evaluator: RandomEvaluator {},
-        };
-        let pos = pos!(x 17:15; o 24:8);
+        let rollout_eval = RolloutEvaluator::new_random();
+        let pos = bpos!(x 17:15; o 24:8);
 
         let results = rollout_eval.eval(&pos);
         // assert_eq!(results.lose_gammon, 1.0);
     }
     #[test]
     fn rollout_always_win_bg() {
-        let rollout_eval = RolloutEvaluator {
-            evaluator: RandomEvaluator {},
-        };
-        let pos = pos!(x 1:8; o 2:15);
+        let rollout_eval = RolloutEvaluator::new_random();
+        let pos = bpos!(x 1:8; o 2:15);
 
         let results = rollout_eval.eval(&pos);
         // assert_eq!(results.win_bg, 1.0);
@@ -148,67 +145,53 @@ mod tests {
 #[cfg(test)]
 mod private_tests {
     use crate::dice::{DiceGenMock, FastrandDice};
-    use crate::evaluator::RandomEvaluator;
     use crate::rollout::RolloutEvaluator;
-    use bkgm::{
-        pos, Dice,
-        GameResult::{LoseBg, LoseGammon, LoseNormal, WinBg, WinGammon, WinNormal},
-        Position,
-    };
-    use std::collections::HashMap;
+    use bkgm::{bpos, Backgammon, Dice, GameResult};
 
     #[test]
     fn single_rollout_win_normal() {
         // Given
-        let rollout_eval = RolloutEvaluator {
-            evaluator: RandomEvaluator {},
-        };
-        let pos = pos!(x 12:1; o 13:1);
+        let rollout_eval = RolloutEvaluator::new_random();
+        let pos = bpos!(x 12:1; o 13:1);
         // When
         let mut dice_gen = DiceGenMock::new(&[Dice::new(2, 1), Dice::new(2, 1)]);
         let result = rollout_eval.single_rollout(&pos, &[Dice::new(4, 5)], &mut dice_gen);
         //Then
         dice_gen.assert_all_dice_were_used();
-        assert_eq!(result, WinNormal);
+        assert_eq!(result, GameResult::WinNormal);
     }
 
     #[test]
     fn single_rollout_lose_normal() {
         // Given
-        let rollout_eval = RolloutEvaluator {
-            evaluator: RandomEvaluator {},
-        };
-        let pos = pos!(x 12:1; o 13:1);
+        let rollout_eval = RolloutEvaluator::new_random();
+        let pos = bpos!(x 12:1; o 13:1);
         // When
         let mut dice_gen = DiceGenMock::new(&[Dice::new(2, 1), Dice::new(2, 1)]);
         let result =
             rollout_eval.single_rollout(&pos, &[Dice::new(1, 2), Dice::new(4, 5)], &mut dice_gen);
         // Then
         dice_gen.assert_all_dice_were_used();
-        assert_eq!(result, LoseNormal);
+        assert_eq!(result, GameResult::LoseNormal);
     }
 
     #[test]
     fn single_rollout_win_gammon() {
         // Given
-        let rollout_eval = RolloutEvaluator {
-            evaluator: RandomEvaluator {},
-        };
-        let pos = pos!(x 1:4; o 12:15);
+        let rollout_eval = RolloutEvaluator::new_random();
+        let pos = bpos!(x 1:4; o 12:15);
         // When
         let result =
             rollout_eval.single_rollout(&pos, &[Dice::new(2, 2)], &mut FastrandDice::new());
         //Then
-        assert_eq!(result, WinGammon);
+        assert_eq!(result, GameResult::WinGammon);
     }
 
     #[test]
     fn single_rollout_lose_gammon() {
         // Given
-        let rollout_eval = RolloutEvaluator {
-            evaluator: RandomEvaluator {},
-        };
-        let pos = pos!(x 12:15; o 24:1);
+        let rollout_eval = RolloutEvaluator::new_random();
+        let pos = bpos!(x 12:15; o 24:1);
         // When
         let result = rollout_eval.single_rollout(
             &pos,
@@ -216,30 +199,26 @@ mod private_tests {
             &mut FastrandDice::new(),
         );
         //Then
-        assert_eq!(result, LoseGammon);
+        assert_eq!(result, GameResult::LoseGammon);
     }
 
     #[test]
     fn single_rollout_win_bg() {
         // Given
-        let rollout_eval = RolloutEvaluator {
-            evaluator: RandomEvaluator {},
-        };
-        let pos = pos!(x 24:1; o 1:15);
+        let rollout_eval = RolloutEvaluator::new_random();
+        let pos = bpos!(x 24:1; o 1:15);
         // When
         let result =
             rollout_eval.single_rollout(&pos, &[Dice::new(6, 6)], &mut FastrandDice::new());
         //Then
-        assert_eq!(result, WinBg);
+        assert_eq!(result, GameResult::WinBackgammon);
     }
 
     #[test]
     fn single_rollout_lose_bg() {
         // Given
-        let rollout_eval = RolloutEvaluator {
-            evaluator: RandomEvaluator {},
-        };
-        let pos = pos!(x 24:15; o 1:1);
+        let rollout_eval = RolloutEvaluator::new_random();
+        let pos = bpos!(x 24:15; o 1:1);
         // When
         let result = rollout_eval.single_rollout(
             &pos,
@@ -247,6 +226,6 @@ mod private_tests {
             &mut FastrandDice::new(),
         );
         //Then
-        assert_eq!(result, LoseBg);
+        assert_eq!(result, GameResult::LoseBackgammon);
     }
 }

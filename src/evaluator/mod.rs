@@ -1,5 +1,4 @@
-use bkgm::GameResult::{self, LoseBg, LoseGammon, LoseNormal, WinBg, WinGammon, WinNormal};
-use bkgm::{Dice, Position};
+use bkgm::{Dice, GameResult, State};
 use std::fmt;
 use std::fmt::Formatter;
 
@@ -61,18 +60,18 @@ impl Probabilities {
     pub fn new(results: &[u32; 6]) -> Self {
         let sum = results.iter().sum::<u32>() as f32;
         Probabilities {
-            win_normal: results[WinNormal as usize] as f32 / sum,
-            win_gammon: results[WinGammon as usize] as f32 / sum,
-            win_bg: results[WinBg as usize] as f32 / sum,
-            lose_normal: results[LoseNormal as usize] as f32 / sum,
-            lose_gammon: results[LoseGammon as usize] as f32 / sum,
-            lose_bg: results[LoseBg as usize] as f32 / sum,
+            win_normal: results[GameResult::WinNormal as usize] as f32 / sum,
+            win_gammon: results[GameResult::WinGammon as usize] as f32 / sum,
+            win_bg: results[GameResult::WinBackgammon as usize] as f32 / sum,
+            lose_normal: results[GameResult::LoseNormal as usize] as f32 / sum,
+            lose_gammon: results[GameResult::LoseGammon as usize] as f32 / sum,
+            lose_bg: results[GameResult::LoseBackgammon as usize] as f32 / sum,
         }
     }
 
     pub fn from(results: &GameResult) -> Self {
         match results {
-            WinNormal => Self {
+            GameResult::WinNormal => Self {
                 win_normal: 1.0,
                 win_gammon: 0.0,
                 win_bg: 0.0,
@@ -80,7 +79,7 @@ impl Probabilities {
                 lose_gammon: 0.0,
                 lose_bg: 0.0,
             },
-            WinGammon => Self {
+            GameResult::WinGammon => Self {
                 win_normal: 0.0,
                 win_gammon: 1.0,
                 win_bg: 0.0,
@@ -88,7 +87,7 @@ impl Probabilities {
                 lose_gammon: 0.0,
                 lose_bg: 0.0,
             },
-            WinBg => Self {
+            GameResult::WinBackgammon => Self {
                 win_normal: 0.0,
                 win_gammon: 0.0,
                 win_bg: 1.0,
@@ -96,7 +95,7 @@ impl Probabilities {
                 lose_gammon: 0.0,
                 lose_bg: 0.0,
             },
-            LoseNormal => Self {
+            GameResult::LoseNormal => Self {
                 win_normal: 0.0,
                 win_gammon: 0.0,
                 win_bg: 1.0,
@@ -104,7 +103,7 @@ impl Probabilities {
                 lose_gammon: 0.0,
                 lose_bg: 0.0,
             },
-            LoseGammon => Self {
+            GameResult::LoseGammon => Self {
                 win_normal: 0.0,
                 win_gammon: 0.0,
                 win_bg: 0.0,
@@ -112,7 +111,7 @@ impl Probabilities {
                 lose_gammon: 1.0,
                 lose_bg: 0.0,
             },
-            LoseBg => Self {
+            GameResult::LoseBackgammon => Self {
                 win_normal: 0.0,
                 win_gammon: 0.0,
                 win_bg: 0.0,
@@ -165,22 +164,21 @@ impl Probabilities {
     }
 }
 
-pub trait Evaluator {
+pub trait Evaluator<T: State>: Sized {
     /// Returns a cubeless evaluation of a position.
     /// Implementing types will calculate the probabilities with different strategies.
     /// Examples of such strategies are a rollout or 1-ply inference of a neural net.
-    fn eval(&self, pos: &Position) -> f32;
+    fn eval(&self, pos: &T) -> f32;
 
     /// Returns the position after applying the *best* move to `pos`.
     /// The returned `Position` has already switches sides.
     /// This means the returned position will have the *lowest* equity of possible positions.
-    fn best_position(&self, pos: &Position, dice: &Dice) -> Position {
-        self.worst_position(&pos.all_positions_after_moving(dice))
-            .clone()
+    fn best_position(&self, pos: &T, dice: &Dice) -> T {
+        self.worst_position(&pos.possible_positions(dice)).clone()
     }
 
     /// Worst position might be interesting, because when you switch sides, it's suddenly the best.
-    fn worst_position<'a>(&'a self, positions: &'a [Position]) -> &Position {
+    fn worst_position<'a>(&'a self, positions: &'a [T]) -> &T {
         positions
             .iter()
             .map(|pos| (pos, self.eval(pos)))
@@ -192,17 +190,30 @@ pub trait Evaluator {
 
 pub struct RandomEvaluator {}
 
-impl Evaluator for RandomEvaluator {
+impl<G: State> Evaluator<G> for RandomEvaluator {
     #[allow(dead_code)]
     /// Returns random probabilities. Each call will return different values.
-    fn eval(&self, _pos: &Position) -> f32 {
+    fn eval(&self, pos: &G) -> f32 {
         fastrand::f32()
+    }
+
+    fn best_position(&self, pos: &G, dice: &Dice) -> G {
+        self.worst_position(&pos.possible_positions(dice)).clone()
+    }
+
+    fn worst_position<'a>(&'a self, positions: &'a [G]) -> &G {
+        positions
+            .iter()
+            .map(|pos| (pos, self.eval(pos)))
+            .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
+            .unwrap()
+            .0
     }
 }
 
 impl RandomEvaluator {
-    #[allow(dead_code)]
     pub fn new() -> RandomEvaluator {
+        #[allow(dead_code)]
         RandomEvaluator {}
     }
 }
@@ -334,17 +345,16 @@ mod probabilities_tests {
 #[cfg(test)]
 mod evaluator_trait_tests {
     use crate::evaluator::Evaluator;
-    use bkgm::{pos, Dice, Position};
-    use std::collections::HashMap;
+    use bkgm::{bpos, Backgammon, Dice, State};
 
-    fn expected_pos() -> Position {
-        pos!(x 5:1, 3:1; o 20:2).flip()
+    fn expected_pos() -> Backgammon {
+        bpos!(x 5:1, 3:1; o 20:2).flip()
     }
 
     /// Test double. Returns not so good probabilities for `expected_pos`, better for everything else.
     struct EvaluatorFake {}
-    impl Evaluator for EvaluatorFake {
-        fn eval(&self, pos: &Position) -> f32 {
+    impl Evaluator<Backgammon> for EvaluatorFake {
+        fn eval(&self, pos: &Backgammon) -> f32 {
             if pos == &expected_pos() {
                 1.0
             } else {
@@ -356,7 +366,7 @@ mod evaluator_trait_tests {
     #[test]
     fn best_position() {
         // Given
-        let given_pos = pos!(x 7:2; o 20:2);
+        let given_pos = bpos!(x 7:2; o 20:2);
         let evaluator = EvaluatorFake {};
         // When
         let best_pos = evaluator.best_position(&given_pos, &Dice::new(4, 2));

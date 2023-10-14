@@ -1,7 +1,8 @@
 use bkgm::{
     dice::{ALL_21, ALL_SINGLES},
+    Backgammon,
     GameState::{GameOver, Ongoing},
-    Position,
+    State,
 };
 use clap::Parser;
 
@@ -23,13 +24,13 @@ struct Args {
     verbose: bool,
 }
 
-fn perft_rec(depth: usize, position: &Position) -> u64 {
+fn perft_rec(depth: usize, position: &Backgammon) -> u64 {
     if depth == 0 {
         return 1;
     }
     let mut count = 0;
     for (die, _) in ALL_21 {
-        let children = position.all_positions_after_moving(&die);
+        let children = position.possible_positions(&die);
         for child in children {
             count += match child.game_state() {
                 Ongoing => perft_rec(depth - 1, &child),
@@ -41,14 +42,14 @@ fn perft_rec(depth: usize, position: &Position) -> u64 {
 }
 
 fn perft(args: &Args) -> u64 {
-    let position = Position::from_id(&args.position).expect("Invalid position");
+    let position = Backgammon::from_id(&args.position).expect("Invalid position");
     if args.verbose {
         position.show();
     }
     let mut total = 0;
     for die in ALL_SINGLES {
         let mut count = 0;
-        let children = position.all_positions_after_moving(&die);
+        let children = position.possible_positions(&die);
         for child in children {
             count += match child.game_state() {
                 Ongoing => perft_rec(args.depth - 1, &child),

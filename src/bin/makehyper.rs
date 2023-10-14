@@ -6,7 +6,7 @@ use bkgm::{
 };
 use clap::Parser;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     fs::File,
     io::{self, BufWriter, Write},
     path::PathBuf,
@@ -20,6 +20,10 @@ struct Args {
     /// Output file
     #[arg(short = 'f', long = "file", default_value = "data/hyper.db")]
     file: PathBuf,
+
+    /// Number of iterations
+    #[arg(short = 'i', long = "iter", default_value = "100")]
+    iterations: usize,
 
     /// Number of checkers
     #[arg(short = 'c', long = "checkers", default_value = "3")]
@@ -46,60 +50,11 @@ fn write_file(file: &PathBuf, data: &[f32]) -> io::Result<()> {
 
 const POSSIBLE: usize = mcomb(26, Hypergammon::NUM_CHECKERS as usize).pow(2);
 
-// fn equity_update(positions: &HashSet<Hypergammon>, equities: Vec<f32>) -> Vec<f32> {
-//     let mut updated = equities.clone();
-
-//     let mut delta = 0.0;
-//     for position in positions {
-//         let equity = match position.game_state() {
-//             Ongoing => {
-//                 let mut total = 0.0;
-//                 for (die, n) in ALL_21 {
-//                     let children = position.possible_positions(&die);
-//                     total += children
-//                         .iter()
-//                         .map(|pos| equities[pos.dbhash()])
-//                         .min_by(|a, b| a.partial_cmp(b).unwrap())
-//                         .unwrap()
-//                         * n;
-//                 }
-//                 total / 36.0
-//             }
-//             GameOver(result) => result.value(),
-//         };
-//         updated[position.dbhash()] = equity;
-//         delta += (equity - equities[position.dbhash()]).abs();
-//     }
-//     println!("Delta: {}", delta);
-//     updated
-// }
-
-// fn calculate_equities(positions: &HashSet<Hypergammon>) -> Vec<f32> {
-//     let mut equities: Vec<f32> = vec![0.0; POSSIBLE];
-//     println!("Equity: {}", equities.len());
-
-//     for &position in positions {
-//         let equity = match position.game_state() {
-//             Ongoing => 0.0,
-//             GameOver(result) => result.value(),
-//         };
-//         equities[position.dbhash()] = equity;
-//     }
-
-//     println!("Positions: {}", equities.len());
-//     for _ in 0..200 {
-//         equities = equity_update(positions, equities);
-//     }
-//     println!("Equity: {}", equities.len());
-
-//     equities
-// }
-
-fn equity_update(equities: &HashMap<Hypergammon, f32>) -> HashMap<Hypergammon, f32> {
+fn equity_update(positions: &HashSet<Hypergammon>, equities: Vec<f32>) -> (Vec<f32>, f32) {
     let mut updated = equities.clone();
 
     let mut delta = 0.0;
-    for position in equities.keys() {
+    for position in positions {
         let equity = match position.game_state() {
             Ongoing => {
                 let mut total = 0.0;
@@ -107,7 +62,7 @@ fn equity_update(equities: &HashMap<Hypergammon, f32>) -> HashMap<Hypergammon, f
                     let children = position.possible_positions(&die);
                     total += children
                         .iter()
-                        .map(|pos| equities[pos])
+                        .map(|pos| equities[pos.dbhash()])
                         .min_by(|a, b| a.partial_cmp(b).unwrap())
                         .unwrap()
                         * n;
@@ -116,31 +71,80 @@ fn equity_update(equities: &HashMap<Hypergammon, f32>) -> HashMap<Hypergammon, f
             }
             GameOver(result) => result.value(),
         };
-        updated.insert(position.clone(), equity);
-        delta += (equity - equities[position]).abs();
+        updated[position.dbhash()] = equity;
+        delta += (equity - equities[position.dbhash()]).abs();
     }
-    println!("Delta: {}", delta);
-    updated
+    (updated, delta)
 }
 
-fn calculate_equities(positions: &HashSet<Hypergammon>) -> HashMap<Hypergammon, f32> {
-    let mut equities = HashMap::new();
+fn calculate_equities(positions: &HashSet<Hypergammon>, iterations: usize) -> Vec<f32> {
+    let mut equities: Vec<f32> = vec![0.0; POSSIBLE];
+    let mut delta;
+
     for &position in positions {
         let equity = match position.game_state() {
             Ongoing => 0.0,
             GameOver(result) => result.value(),
         };
-        equities.insert(position, equity);
+        equities[position.dbhash()] = equity;
     }
 
     println!("Positions: {}", equities.len());
-    for _ in 0..200 {
-        equities = equity_update(&equities);
+    for iteration in 0..iterations {
+        (equities, delta) = equity_update(positions, equities);
+        println!("Iteration: {} Delta: {}", iteration, delta);
     }
     println!("Equity: {}", equities.len());
 
     equities
 }
+
+// fn equity_update(equities: &HashMap<Hypergammon, f32>) -> HashMap<Hypergammon, f32> {
+//     let mut updated = equities.clone();
+
+//     let mut delta = 0.0;
+//     for position in equities.keys() {
+//         let equity = match position.game_state() {
+//             Ongoing => {
+//                 let mut total = 0.0;
+//                 for (die, n) in ALL_21 {
+//                     let children = position.possible_positions(&die);
+//                     total += children
+//                         .iter()
+//                         .map(|pos| equities[pos])
+//                         .min_by(|a, b| a.partial_cmp(b).unwrap())
+//                         .unwrap()
+//                         * n;
+//                 }
+//                 total / 36.0
+//             }
+//             GameOver(result) => result.value(),
+//         };
+//         updated.insert(position.clone(), equity);
+//         delta += (equity - equities[position]).abs();
+//     }
+//     println!("Delta: {}", delta);
+//     updated
+// }
+
+// fn calculate_equities(positions: &HashSet<Hypergammon>) -> HashMap<Hypergammon, f32> {
+//     let mut equities = HashMap::new();
+//     for &position in positions {
+//         let equity = match position.game_state() {
+//             Ongoing => 0.0,
+//             GameOver(result) => result.value(),
+//         };
+//         equities.insert(position, equity);
+//     }
+
+//     println!("Positions: {}", equities.len());
+//     for _ in 0..200 {
+//         equities = equity_update(&equities);
+//     }
+//     println!("Equity: {}", equities.len());
+
+//     equities
+// }
 
 fn unqiue(verbose: bool) -> HashSet<Hypergammon> {
     let position = Hypergammon::new();
@@ -200,10 +204,9 @@ fn unqiue(verbose: bool) -> HashSet<Hypergammon> {
 
 fn run(args: &Args) -> io::Result<()> {
     let positions = unqiue(args.verbose);
-    let equities = calculate_equities(&positions);
+    let equities = calculate_equities(&positions, args.iterations);
     println!("Writing to {}", args.file.display());
-    // write_file(&args.file, &equities)
-    Ok(())
+    write_file(&args.file, &equities)
 }
 
 fn main() -> io::Result<()> {

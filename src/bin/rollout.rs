@@ -1,3 +1,4 @@
+use bkgm::{Backgammon, State};
 use clap::Parser;
 use indicatif::{ProgressBar, ProgressStyle};
 use staffa::evaluator::{Evaluator, OnnxEvaluator};
@@ -30,7 +31,8 @@ struct Args {
 
 fn run(args: &Args) -> io::Result<()> {
     // add error handling
-    let evaluator = OnnxEvaluator::from_file_path(&args.model).expect("Model not found");
+    let evaluator =
+        OnnxEvaluator::<Backgammon>::from_file_path(&args.model).expect("Model not found");
 
     let mut headers = vec!["positionid".to_string()];
     headers.extend(evaluator.output_labels());
@@ -59,7 +61,7 @@ fn run(args: &Args) -> io::Result<()> {
     for position in positions.iter() {
         let probabilities = rollout.eval(position);
         let mut data = vec![position.position_id().to_string()];
-        data.extend(probabilities.to_vec().iter().map(|f| format!("{:.5}", f)));
+        // data.extend(probabilities.to_vec().iter().map(|f| format!("{:.5}", f)));
         wtr.write_record(data).unwrap();
         pb.inc(1);
     }

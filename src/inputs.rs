@@ -131,7 +131,6 @@ impl PipInput {
 mod tests {
     use crate::inputs::{Inputs, NUM_INPUTS};
     use bkgm::{pos, Position, O_BAR};
-    use std::collections::HashMap;
 
     #[test]
     fn inputs_display() {
