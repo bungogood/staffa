@@ -18,17 +18,17 @@ struct Args {
     model2: PathBuf,
 
     /// Matches
-    #[arg(short = 'm', long = "matches", default_value = "100")]
+    #[arg(short = 'm', long = "matches", default_value = "10000")]
     matches: usize,
 }
 
 fn run(args: &Args) {
-    // let evaluator1 = RandomEvaluator::new();
-    let evaluator1 =
-        OnnxEvaluator::<Backgammon>::from_file_path(&args.model1).expect("Model not found");
-    let evaluator2 = OnnxEvaluator::from_file_path(&args.model2).expect("Model not found");
+    let evaluator1 = HyperEvaluator::new().unwrap();
+    // let evaluator1 =
+    //     OnnxEvaluator::<Backgammon>::from_file_path(&args.model1).expect("Model not found");
+    // let evaluator2 = OnnxEvaluator::from_file_path(&args.model2).expect("Model not found");
     // let evaluator2 = PubEval::new();
-    // let evaluator2 = HyperEvaluator::new().unwrap();
+    let evaluator2 = RandomEvaluator::new();
     let mut duel = Duel::new(evaluator1, evaluator2);
 
     // TODO: play args.matches games and print the results

@@ -49,6 +49,6 @@ impl<R: BufRead> Iterator for F32Reader<R> {
     fn next(&mut self) -> Option<Self::Item> {
         let mut buff: [u8; 4] = [0; 4];
         self.inner.read_exact(&mut buff).ok()?;
-        Some(f32::from_be_bytes(buff))
+        Some(f32::from_le_bytes(buff))
     }
 }
