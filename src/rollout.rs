@@ -1,7 +1,8 @@
 use std::marker::PhantomData;
 
 use crate::dice::{DiceGen, FastrandDice};
-use crate::evaluator::{Evaluator, Probabilities, RandomEvaluator};
+use crate::evaluator::{Evaluator, RandomEvaluator};
+use crate::probabilities::Probabilities;
 use bkgm::State;
 use bkgm::{
     dice::ALL_1296,

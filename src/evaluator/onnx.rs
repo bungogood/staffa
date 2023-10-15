@@ -1,5 +1,6 @@
-use crate::evaluator::{Evaluator, Probabilities};
+use crate::evaluator::Evaluator;
 use crate::inputs::Inputs;
+use crate::probabilities::Probabilities;
 use std::marker::PhantomData;
 use std::path::Path;
 use tract_onnx::prelude::*;

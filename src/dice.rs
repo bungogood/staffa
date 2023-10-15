@@ -1,11 +1,11 @@
 use bkgm::Dice;
 
-pub(crate) trait DiceGen {
+pub trait DiceGen {
     /// Returns dice
     fn roll(&mut self) -> Dice;
 }
 
-pub(crate) struct FastrandDice {
+pub struct FastrandDice {
     generator: fastrand::Rng,
 }
 
@@ -28,7 +28,7 @@ impl FastrandDice {
     }
 
     #[allow(dead_code)]
-    pub(crate) fn with_seed(seed: u64) -> FastrandDice {
+    pub fn with_seed(seed: u64) -> FastrandDice {
         FastrandDice {
             generator: fastrand::Rng::with_seed(seed),
         }
