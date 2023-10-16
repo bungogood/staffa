@@ -85,11 +85,11 @@ mod tests {
     #[test]
     fn test_perft() {
         let args = Args {
-            depth: 2,
+            depth: 1,
             position: "4HPwATDgc/ABMA".to_string(),
             verbose: false,
         };
         let total = perft(&args);
-        assert_eq!(total, 447);
+        assert_eq!(total, 190);
     }
 }

@@ -1,7 +1,7 @@
 use bkgm::{Backgammon, State};
 use clap::Parser;
 use indicatif::{ProgressBar, ProgressStyle};
-use staffa::evaluator::{Evaluator, OnnxEvaluator};
+use staffa::evaluator::{Evaluator, NNEvaluator, OnnxEvaluator, WildbgEvaluator};
 use staffa::position_finder::PositionFinder;
 use staffa::rollout::RolloutEvaluator;
 use std::fs::File;
@@ -32,10 +32,9 @@ struct Args {
 fn run(args: &Args) -> io::Result<()> {
     // add error handling
     let evaluator =
-        OnnxEvaluator::<Backgammon>::from_file_path(&args.model).expect("Model not found");
+        WildbgEvaluator::<Backgammon>::from_file_path(&args.model).expect("Model not found");
 
-    let mut headers = vec!["positionid".to_string()];
-    headers.extend(evaluator.output_labels());
+    let headers = vec!["positionid", "win", "wing", "winbg", "lossg", "lossbg"];
 
     let rollout = RolloutEvaluator::with_evaluator(evaluator.clone());
     let mut finder = PositionFinder::new(evaluator);
@@ -61,7 +60,16 @@ fn run(args: &Args) -> io::Result<()> {
     for position in positions.iter() {
         let probabilities = rollout.eval(position);
         let mut data = vec![position.position_id().to_string()];
-        // data.extend(probabilities.to_vec().iter().map(|f| format!("{:.5}", f)));
+        data.extend(probabilities.to_gnu().iter().map(|f| format!("{:.5}", f)));
+        wtr.write_record(data).unwrap();
+        let mut data = vec![position.flip().position_id().to_string()];
+        data.extend(
+            probabilities
+                .flip()
+                .to_gnu()
+                .iter()
+                .map(|f| format!("{:.5}", f)),
+        );
         wtr.write_record(data).unwrap();
         pb.inc(1);
     }

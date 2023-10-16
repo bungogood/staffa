@@ -1,5 +1,7 @@
 use std::marker::PhantomData;
 
+use crate::probabilities::Probabilities;
+
 use super::Evaluator;
 use bkgm::{dice::ALL_21, State};
 
@@ -11,11 +13,12 @@ pub struct PlyEvaluator<E: Evaluator<G>, G: State> {
 }
 
 impl<E: Evaluator<G>, G: State> Evaluator<G> for PlyEvaluator<E, G> {
-    fn eval(&self, pos: &G) -> f32 {
+    fn eval(&self, pos: &G) -> Probabilities {
         match pos.game_state() {
             bkgm::GameState::Ongoing => self.ply(pos),
             bkgm::GameState::GameOver(result) => result.value(),
-        }
+        };
+        todo!()
     }
 }
 
@@ -33,7 +36,7 @@ impl<E: Evaluator<G>, G: State> PlyEvaluator<E, G> {
         let mut score = 0.0;
         for (dice, n) in ALL_21 {
             let best = self.evaluator.best_position(pos, &dice);
-            score += n * self.evaluator.eval(&best);
+            // score += n * self.evaluator.eval(&best);
         }
         score / 36.0
     }

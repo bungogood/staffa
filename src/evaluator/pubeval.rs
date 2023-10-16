@@ -2,8 +2,6 @@ use std::marker::PhantomData;
 
 use bkgm::State;
 
-use super::Evaluator;
-
 /// https://bkgm.com/rgb/rgb.cgi?view+610
 
 // Backgammon move-selection evaluation function
@@ -46,24 +44,6 @@ use super::Evaluator;
 
 pub struct PubEval<G: State> {
     phantom: PhantomData<G>,
-}
-
-impl<G: State> Evaluator<G> for PubEval<G> {
-    fn eval(&self, pos: &G) -> f32 {
-        0.0
-    }
-
-    fn best_position(&self, pos: &G, dice: &bkgm::Dice) -> G {
-        // let race = pos.is_race();
-        let race = false;
-        let positions = pos.possible_positions(dice);
-        *positions
-            .iter()
-            .map(|pos| (pos, self.eval(pos)))
-            .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
-            .unwrap()
-            .0
-    }
 }
 
 impl<G: State> PubEval<G> {

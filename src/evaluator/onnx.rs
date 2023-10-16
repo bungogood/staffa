@@ -15,24 +15,16 @@ pub struct OnnxEvaluator<G: State> {
 }
 
 impl<G: State> Evaluator<G> for OnnxEvaluator<G> {
-    fn eval(&self, position: &G) -> f32 {
-        let inputs = Inputs::from_position(&position.position()).to_vec();
-        let tract_inputs = tract_ndarray::Array1::from_vec(inputs)
-            .into_shape([1, crate::inputs::NUM_INPUTS])
-            .unwrap();
-        let tensor = tract_inputs.into_tensor();
-        let result = self.model.run(tvec!(tensor.into())).unwrap();
-        let array_view = result[0].to_array_view::<f32>().unwrap();
-        let result_vec: Vec<&f32> = array_view.iter().collect();
-        let probs = Probabilities {
-            win_normal: *result_vec[0],
-            win_gammon: *result_vec[1],
-            win_bg: *result_vec[2],
-            lose_normal: *result_vec[3],
-            lose_gammon: *result_vec[4],
-            lose_bg: *result_vec[5],
-        };
-        probs.equity()
+    fn eval(&self, pos: &G) -> Probabilities {
+        let output = self.output_vec(pos);
+        Probabilities {
+            win_normal: output[0],
+            win_gammon: output[1],
+            win_bg: output[2],
+            lose_normal: output[3],
+            lose_gammon: output[4],
+            lose_bg: output[5],
+        }
     }
 }
 
@@ -56,7 +48,7 @@ impl<G: State> OnnxEvaluator<G> {
         inputs.to_vec()
     }
 
-    pub fn outputs(&self, position: &G) -> Vec<f32> {
+    pub fn output_vec(&self, position: &G) -> Vec<f32> {
         let inputs = self.inputs(position);
         let tract_inputs = tract_ndarray::Array1::from_vec(inputs)
             .into_shape([1, crate::inputs::NUM_INPUTS])
@@ -66,8 +58,7 @@ impl<G: State> OnnxEvaluator<G> {
         // run the model on the input
         let result = self.model.run(tvec!(tensor.into())).unwrap();
         let array_view = result[0].to_array_view::<f32>().unwrap();
-        let result_vec: Vec<&f32> = array_view.iter().collect();
-        result_vec.iter().map(|f| **f).collect()
+        array_view.iter().map(|&x| x).collect()
     }
 
     pub fn input_labels(&self) -> Vec<String> {

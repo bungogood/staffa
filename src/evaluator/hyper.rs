@@ -4,6 +4,8 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 
+use super::PartialEvaluator;
+
 const POSSIBLE: usize = mcomb(26, Hypergammon::NUM_CHECKERS as usize).pow(2);
 
 #[derive(Clone)]
@@ -11,8 +13,8 @@ pub struct HyperEvaluator {
     equities: Vec<f32>,
 }
 
-impl Evaluator<Hypergammon> for HyperEvaluator {
-    fn eval(&self, position: &Hypergammon) -> f32 {
+impl PartialEvaluator<Hypergammon> for HyperEvaluator {
+    fn try_eval(&self, position: &Hypergammon) -> f32 {
         self.equities[position.dbhash()]
     }
 }

@@ -101,7 +101,7 @@ fn unqiue(verbose: bool) -> (Unique, Vec<f32>) {
         let children = position.possible_positions(&die);
         for child in children {
             if !found.contains(&child) {
-                found.insert(child.clone());
+                found.insert(child);
                 new_positons.push(child);
             }
         }
@@ -128,10 +128,10 @@ fn unqiue(verbose: bool) -> (Unique, Vec<f32>) {
                     let mut c = vec![];
                     for (die, n) in ALL_21 {
                         let children = position.possible_positions(&die);
-                        c.push((n, children.iter().clone().map(|pos| pos.dbhash()).collect()));
+                        c.push((n, children.iter().map(|pos| pos.dbhash()).collect()));
                         for child in children {
                             if !found.contains(&child) {
-                                found.insert(child.clone());
+                                found.insert(child);
                                 new_positons.push(child);
                             }
                         }

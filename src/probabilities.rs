@@ -28,22 +28,6 @@ impl fmt::Debug for Probabilities {
     }
 }
 
-/// Used when writing CSV data to a file
-impl fmt::Display for Probabilities {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{};{};{};{};{};{}",
-            self.win_normal,
-            self.win_gammon,
-            self.win_bg,
-            self.lose_normal,
-            self.lose_gammon,
-            self.lose_bg
-        )
-    }
-}
-
 impl Probabilities {
     /// Typically used from rollouts.
     /// The index within the array has to correspond to the discriminant of the `Probabilities` enum.
@@ -125,7 +109,7 @@ impl Probabilities {
         }
     }
 
-    fn switch_sides(&self) -> Self {
+    pub fn flip(&self) -> Self {
         Self {
             win_normal: self.lose_normal,
             win_gammon: self.lose_gammon,
@@ -144,12 +128,28 @@ impl Probabilities {
     }
 
     pub fn to_vec(&self) -> Vec<f32> {
-        vec![
+        Vec::from(self.to_slice())
+    }
+
+    pub fn to_slice(&self) -> [f32; 6] {
+        [
             self.win_normal,
             self.win_gammon,
             self.win_bg,
             self.lose_normal,
             self.lose_gammon,
+            self.lose_bg,
+        ]
+    }
+
+    pub fn to_gnu(&self) -> [f32; 5] {
+        let win_gammon = self.win_gammon + self.win_bg;
+        let lose_gammon = self.lose_gammon + self.lose_bg;
+        [
+            self.win_normal + win_gammon,
+            win_gammon,
+            self.win_bg,
+            lose_gammon,
             self.lose_bg,
         ]
     }
@@ -166,6 +166,42 @@ impl From<&ResultCounter> for Probabilities {
             lose_normal: value.num_of(GameResult::LoseNormal) as f32 / sum,
             lose_gammon: value.num_of(GameResult::LoseGammon) as f32 / sum,
             lose_bg: value.num_of(GameResult::LoseBackgammon) as f32 / sum,
+        }
+    }
+}
+
+impl From<&[f32; 6]> for Probabilities {
+    /// Typically used from rollouts.
+    fn from(value: &[f32; 6]) -> Self {
+        let sum = value.iter().sum::<f32>();
+        Probabilities {
+            win_normal: value[0] / sum,
+            win_gammon: value[1] / sum,
+            win_bg: value[2] / sum,
+            lose_normal: value[3] / sum,
+            lose_gammon: value[4] / sum,
+            lose_bg: value[5] / sum,
+        }
+    }
+}
+
+impl From<&[f32; 5]> for Probabilities {
+    /// Typically used from rollouts.
+    fn from(value: &[f32; 5]) -> Self {
+        let win_bg = value[2];
+        let lose_bg = value[4];
+        let win_gammon = value[1] - win_bg;
+        let lose_gammon = value[3] - lose_bg;
+        let win_normal = value[0] - value[1];
+        let lose_normal = 1.0 - value[0] - value[3];
+
+        Probabilities {
+            win_normal,
+            win_gammon,
+            win_bg,
+            lose_normal,
+            lose_gammon,
+            lose_bg,
         }
     }
 }
@@ -236,22 +272,6 @@ mod probabilities_tests {
         assert_eq!(probabilities.lose_normal, 0.125);
         assert_eq!(probabilities.lose_gammon, 0.25);
         assert_eq!(probabilities.lose_bg, 0.5);
-    }
-
-    #[test]
-    fn to_string() {
-        let probabilities = Probabilities {
-            win_normal: 1.0 / 21.0,
-            win_gammon: 2.0 / 21.0,
-            win_bg: 3.0 / 21.0,
-            lose_normal: 4.0 / 21.0,
-            lose_gammon: 5.0 / 21.0,
-            lose_bg: 6.0 / 21.0,
-        };
-        assert_eq!(
-            probabilities.to_string(),
-            "0.04761905;0.0952381;0.14285715;0.1904762;0.23809524;0.2857143"
-        );
     }
 
     #[test]
@@ -343,5 +363,19 @@ mod probabilities_tests {
             lose_bg: 0.1,
         };
         assert_eq!(probabilities.equity(), 0.0);
+    }
+
+    #[test]
+    fn to_gnu() {
+        let probabilities = Probabilities {
+            win_normal: 0.3,
+            win_gammon: 0.1,
+            win_bg: 0.1,
+            lose_normal: 0.3,
+            lose_gammon: 0.1,
+            lose_bg: 0.1,
+        };
+        let gv = probabilities.to_gnu();
+        assert_eq!(probabilities, Probabilities::from(&gv));
     }
 }

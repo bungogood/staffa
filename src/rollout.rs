@@ -18,7 +18,7 @@ pub struct RolloutEvaluator<E: Evaluator<G>, G: State> {
 
 impl<E: Evaluator<G> + Sync, G: State> Evaluator<G> for RolloutEvaluator<E, G> {
     /// Rolls out 1296 times, first two half moves are given, rest is random
-    fn eval(&self, pos: &G) -> f32 {
+    fn eval(&self, pos: &G) -> Probabilities {
         debug_assert!(pos.game_state() == Ongoing);
         let dice = ALL_1296;
 
@@ -39,7 +39,7 @@ impl<E: Evaluator<G> + Sync, G: State> Evaluator<G> for RolloutEvaluator<E, G> {
             6 * 6 * 6 * 6,
             "Rollout should look at 1296 games"
         );
-        Probabilities::new(&results).equity()
+        Probabilities::new(&results)
     }
 }
 
@@ -120,6 +120,7 @@ mod tests {
         // Son in total we expect `x` to win 972 + 81 = 1053 games and `o` to win 243 games.
         // In percentage: `x` will win normal 81.25% and lose normal 18.75%.
 
+        #[allow(unused_variables)]
         let results = rollout_eval.eval(&pos);
         // assert_eq!(results.win_normal, 0.8125);
         // assert_eq!(results.lose_normal, 0.1875);
@@ -130,6 +131,7 @@ mod tests {
         let rollout_eval = RolloutEvaluator::new_random();
         let pos = bpos!(x 17:15; o 24:8);
 
+        #[allow(unused_variables)]
         let results = rollout_eval.eval(&pos);
         // assert_eq!(results.lose_gammon, 1.0);
     }
@@ -138,6 +140,7 @@ mod tests {
         let rollout_eval = RolloutEvaluator::new_random();
         let pos = bpos!(x 1:8; o 2:15);
 
+        #[allow(unused_variables)]
         let results = rollout_eval.eval(&pos);
         // assert_eq!(results.win_bg, 1.0);
     }

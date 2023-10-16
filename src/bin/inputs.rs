@@ -1,7 +1,8 @@
 use bkgm::{Backgammon, State};
 use clap::Parser;
 use indicatif::{ProgressBar, ProgressStyle};
-use staffa::evaluator::OnnxEvaluator;
+use staffa::evaluator::{NNEvaluator, WildbgEvaluator};
+use staffa::probabilities::{self, Probabilities};
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, Seek};
 use std::path::PathBuf;
@@ -31,7 +32,7 @@ fn count_lines<R: io::Read>(reader: R) -> io::Result<usize> {
 
 fn run(args: &Args) -> io::Result<()> {
     let evaluator =
-        OnnxEvaluator::<Backgammon>::from_file_path(&args.model).expect("Model not found");
+        WildbgEvaluator::<Backgammon>::from_file_path(&args.model).expect("Model not found");
 
     let mut infile = File::open(&args.infile)?;
     let outfile = File::create(&args.outfile)?;
@@ -56,12 +57,7 @@ fn run(args: &Args) -> io::Result<()> {
             .unwrap(),
     );
 
-    let mut headers: Vec<String> = rdr
-        .byte_headers()?
-        .iter()
-        .skip(1)
-        .map(|s| String::from_utf8_lossy(s).to_string())
-        .collect();
+    let mut headers = evaluator.output_labels();
     headers.extend(evaluator.input_labels());
 
     wtr.write_record(headers)?;
@@ -70,9 +66,19 @@ fn run(args: &Args) -> io::Result<()> {
         let line = line?;
         let mut line_iter = line.iter();
         let pid = line_iter.next().unwrap();
+        let outcome: [f32; 5] = line_iter
+            .map(|f| f.parse().unwrap())
+            .collect::<Vec<f32>>()
+            .try_into()
+            .unwrap();
+        let probabilities = Probabilities::from(&outcome);
         let position = Backgammon::from_id(&pid.to_string()).expect("Invalid position id");
-        let inputs = evaluator.inputs(&position);
-        let mut data = line_iter.map(|f| f.to_string()).collect::<Vec<String>>();
+        let inputs = evaluator.input_vec(&position);
+        let mut data = probabilities
+            .to_vec()
+            .iter()
+            .map(|f| format!("{:.5}", f))
+            .collect::<Vec<String>>();
         data.extend(inputs.iter().map(|f| f.to_string()));
         wtr.write_record(data)?;
         pb.inc(1);
