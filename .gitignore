@@ -6,5 +6,6 @@ debug/
 target/
 
 # Project
+logs/
 /data/
 /model/
