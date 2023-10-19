@@ -106,6 +106,7 @@ fn equity_update(positions: &PosMap, probs: &Vec<Probabilities>) -> Vec<Probabil
         .enumerate()
         .map(|(hash, equity)| match positions.get(&hash) {
             Some(rolls) => {
+                let mut possiblilies = 0.0;
                 let mut total = Probabilities::empty();
                 for (n, children) in rolls {
                     let equity = children
@@ -114,6 +115,7 @@ fn equity_update(positions: &PosMap, probs: &Vec<Probabilities>) -> Vec<Probabil
                         .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
                         .unwrap()
                         .0;
+                    possiblilies += n;
                     total = Probabilities {
                         win_normal: total.win_normal + n * equity.win_normal,
                         win_gammon: total.win_gammon + n * equity.win_gammon,
@@ -123,20 +125,22 @@ fn equity_update(positions: &PosMap, probs: &Vec<Probabilities>) -> Vec<Probabil
                         lose_bg: total.lose_bg + n * equity.lose_bg,
                     }
                 }
-                let sum = total.win_normal
-                    + total.win_gammon
-                    + total.win_bg
-                    + total.lose_normal
-                    + total.lose_gammon
-                    + total.lose_bg;
-                Probabilities {
-                    win_normal: total.win_normal / sum,
-                    win_gammon: total.win_gammon / sum,
-                    win_bg: total.win_bg / sum,
-                    lose_normal: total.lose_normal / sum,
-                    lose_gammon: total.lose_gammon / sum,
-                    lose_bg: total.lose_bg / sum,
-                }
+                let x = Probabilities {
+                    win_normal: total.win_normal / possiblilies,
+                    win_gammon: total.win_gammon / possiblilies,
+                    win_bg: total.win_bg / possiblilies,
+                    lose_normal: total.lose_normal / possiblilies,
+                    lose_gammon: total.lose_gammon / possiblilies,
+                    lose_bg: total.lose_bg / possiblilies,
+                };
+                let sum = x.win_normal
+                    + x.win_gammon
+                    + x.win_bg
+                    + x.lose_normal
+                    + x.lose_gammon
+                    + x.lose_bg;
+                assert!(sum < 1.000);
+                x
             }
             None => *equity,
         })
