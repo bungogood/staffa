@@ -3,7 +3,7 @@ use std::fmt;
 use bkgm::GameResult;
 
 /// Sum of all six fields will always be 1.0
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone, Copy)]
 pub struct Probabilities {
     pub win_normal: f32,
     pub win_gammon: f32,
@@ -41,6 +41,17 @@ impl Probabilities {
             lose_normal: results[GameResult::LoseNormal as usize] as f32 / sum,
             lose_gammon: results[GameResult::LoseGammon as usize] as f32 / sum,
             lose_bg: results[GameResult::LoseBackgammon as usize] as f32 / sum,
+        }
+    }
+
+    pub fn empty() -> Self {
+        Probabilities {
+            win_normal: 0.0,
+            win_gammon: 0.0,
+            win_bg: 0.0,
+            lose_normal: 0.0,
+            lose_gammon: 0.0,
+            lose_bg: 0.0,
         }
     }
 

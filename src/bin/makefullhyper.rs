@@ -7,6 +7,7 @@ use bkgm::{
 use clap::Parser;
 use indicatif::{ParallelProgressIterator, ProgressStyle};
 use rayon::prelude::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
+use staffa::probabilities::Probabilities;
 use std::{
     collections::{HashMap, HashSet},
     fs::File,
@@ -21,7 +22,7 @@ use std::{
 #[command(author, version, about, long_about = None)]
 struct Args {
     /// Output file
-    #[arg(short = 'f', long = "file", default_value = "data/hyper.db")]
+    #[arg(short = 'f', long = "file", default_value = "data/hyper.full.db")]
     file: PathBuf,
 
     /// Number of iterations
@@ -41,15 +42,20 @@ struct Args {
     verbose: bool,
 }
 
-fn write_file(file: &PathBuf, data: &[f32]) -> io::Result<()> {
+fn write_file(file: &PathBuf, probs: &[Probabilities]) -> io::Result<()> {
     // Open a binary file for writing
     let file = File::create(file)?;
 
     let mut buf_writer = BufWriter::new(file);
 
     // Write the array to the file as binary data
-    for &value in data.iter() {
-        buf_writer.write_all(&value.to_le_bytes())?;
+    for &prob in probs.iter() {
+        buf_writer.write_all(&prob.win_normal.to_le_bytes())?;
+        buf_writer.write_all(&prob.win_gammon.to_le_bytes())?;
+        buf_writer.write_all(&prob.win_bg.to_le_bytes())?;
+        buf_writer.write_all(&prob.lose_normal.to_le_bytes())?;
+        buf_writer.write_all(&prob.lose_gammon.to_le_bytes())?;
+        buf_writer.write_all(&prob.lose_bg.to_le_bytes())?;
     }
 
     buf_writer.flush()
@@ -57,8 +63,8 @@ fn write_file(file: &PathBuf, data: &[f32]) -> io::Result<()> {
 
 const POSSIBLE: usize = mcomb(26, Hypergammon::NUM_CHECKERS as usize).pow(2);
 
-fn equity_update(positions: &Unique, equities: &Vec<f32>) -> Vec<f32> {
-    let shared_equities = Arc::new(equities);
+fn equity_update(positions: &Unique, probs: &Vec<Probabilities>) -> Vec<Probabilities> {
+    let shared_probs = Arc::new(probs);
 
     let style = ProgressStyle::default_bar()
         .template(
@@ -66,24 +72,39 @@ fn equity_update(positions: &Unique, equities: &Vec<f32>) -> Vec<f32> {
         )
         .unwrap();
 
-    equities
+    probs
         .par_iter()
         .progress_with_style(style)
         .enumerate()
         .map(|(h, e)| match positions.get(&h) {
             Some(rolls) => {
                 let mut possiblilies = 0.0;
-                let mut total = 0.0;
+                let mut total = Probabilities::empty();
                 for (n, children) in rolls {
                     let equity = children
                         .iter()
-                        .map(|pos| shared_equities[*pos])
-                        .max_by(|a, b| a.partial_cmp(b).unwrap())
-                        .unwrap();
+                        .map(|pos| (shared_probs[*pos], shared_probs[*pos].equity()))
+                        .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
+                        .unwrap()
+                        .0;
                     possiblilies += n;
-                    total += n * -equity;
+                    total = Probabilities {
+                        win_normal: total.win_normal + n * equity.win_normal,
+                        win_gammon: total.win_gammon + n * equity.win_gammon,
+                        win_bg: total.win_bg + n * equity.win_bg,
+                        lose_normal: total.lose_normal + n * equity.lose_normal,
+                        lose_gammon: total.lose_gammon + n * equity.lose_gammon,
+                        lose_bg: total.lose_bg + n * equity.lose_bg,
+                    }
                 }
-                total / possiblilies
+                Probabilities {
+                    win_normal: total.win_normal / possiblilies,
+                    win_gammon: total.win_gammon / possiblilies,
+                    win_bg: total.win_bg / possiblilies,
+                    lose_normal: total.lose_normal / possiblilies,
+                    lose_gammon: total.lose_gammon / possiblilies,
+                    lose_bg: total.lose_bg / possiblilies,
+                }
             }
             None => *e,
         })
@@ -92,8 +113,8 @@ fn equity_update(positions: &Unique, equities: &Vec<f32>) -> Vec<f32> {
 
 type Unique = HashMap<usize, Vec<(f32, Vec<usize>)>>;
 
-fn unqiue(verbose: bool) -> (Unique, Vec<f32>) {
-    let mut equities = vec![0.0; POSSIBLE];
+fn unqiue(verbose: bool) -> (Unique, Vec<Probabilities>) {
+    let mut equities = vec![Probabilities::empty(); POSSIBLE];
     let mut non_terminal = HashMap::with_capacity(POSSIBLE);
     let position = Hypergammon::new();
     let mut found = HashSet::new();
@@ -142,7 +163,7 @@ fn unqiue(verbose: bool) -> (Unique, Vec<f32>) {
                     non_terminal.insert(position.dbhash(), c);
                 }
                 GameOver(result) => {
-                    equities[position.dbhash()] = result.value();
+                    equities[position.dbhash()] = Probabilities::from_result(&result);
                 }
             }
         }
@@ -169,9 +190,14 @@ fn run(args: &Args) -> io::Result<()> {
     for iteration in 0..args.iterations {
         equities = equity_update(&positions, &equities);
         println!(
-            "Iter: {}\tStart Equity: {:.5}",
+            "Itr: {}\tStart Equity: wn:{:.5} wg:{:.5} wb:{:.5} ln:{:.5} lg:{:.5} lb:{:.5}",
             iteration + 1,
-            equities[starting]
+            equities[starting].win_normal,
+            equities[starting].win_gammon,
+            equities[starting].win_bg,
+            equities[starting].lose_normal,
+            equities[starting].lose_gammon,
+            equities[starting].lose_bg,
         );
     }
     println!("Writing to {}", args.file.display());
