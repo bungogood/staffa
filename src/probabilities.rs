@@ -84,7 +84,7 @@ impl Probabilities {
             GameResult::LoseNormal => Self {
                 win_normal: 0.0,
                 win_gammon: 0.0,
-                win_bg: 1.0,
+                win_bg: 0.0,
                 lose_normal: 1.0,
                 lose_gammon: 0.0,
                 lose_bg: 0.0,
