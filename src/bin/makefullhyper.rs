@@ -11,7 +11,7 @@ use staffa::probabilities::Probabilities;
 use std::{
     collections::{HashMap, HashSet},
     fs::File,
-    io::{self, BufWriter, Write},
+    io::{self, BufReader, BufWriter, Write},
     path::PathBuf,
     sync::Arc,
 };
@@ -25,6 +25,10 @@ struct Args {
     #[arg(short = 'f', long = "file", default_value = "data/hyper.full.db")]
     file: PathBuf,
 
+    /// Unique file
+    #[arg(short = 'u', long = "unqiue", default_value = "data/unique.csv")]
+    uniquefile: PathBuf,
+
     /// Number of iterations
     #[arg(short = 'i', long = "iter", default_value = "100")]
     iterations: usize,
@@ -37,9 +41,35 @@ struct Args {
     #[arg(short = 'r', long = "resume")]
     resume: Option<PathBuf>,
 
+    /// Separator
+    #[arg(short = 's', long = "sep", default_value = ",")]
+    sep: char, // TODO: Fix this to be a single byte and accept ;
+
     /// Verbose
     #[arg(short = 'v', long = "verbose", default_value = "false")]
     verbose: bool,
+}
+
+fn read_unique(args: &Args) -> io::Result<Vec<Hypergammon>> {
+    // Open a binary file for writing
+    let file = File::open(&args.uniquefile)?;
+
+    let mut rdr = csv::ReaderBuilder::new()
+        .delimiter(args.sep as u8)
+        .has_headers(true)
+        .from_reader(BufReader::new(file));
+
+    let mut positions = vec![];
+
+    for line in rdr.records() {
+        let line = line?;
+        let mut line_iter = line.iter();
+        let pid = line_iter.next().expect("No position id");
+        let position = Hypergammon::from_id(&pid.to_string()).expect("Invalid position id");
+        positions.push(position);
+    }
+
+    Ok(positions)
 }
 
 fn write_file(file: &PathBuf, probs: &[Probabilities]) -> io::Result<()> {
@@ -62,21 +92,19 @@ fn write_file(file: &PathBuf, probs: &[Probabilities]) -> io::Result<()> {
 }
 
 const POSSIBLE: usize = mcomb(26, Hypergammon::NUM_CHECKERS as usize).pow(2);
+const STYLE: &str =
+    "{wide_bar} {pos}/{len} ({percent}%) Elapsed: {elapsed_precise} ETA: {eta_precise}";
 
-fn equity_update(positions: &Unique, probs: &Vec<Probabilities>) -> Vec<Probabilities> {
+fn equity_update(positions: &PosMap, probs: &Vec<Probabilities>) -> Vec<Probabilities> {
     let shared_probs = Arc::new(probs);
 
-    let style = ProgressStyle::default_bar()
-        .template(
-            "{wide_bar} {pos}/{len} ({percent}%) Elapsed: {elapsed_precise} ETA: {eta_precise}",
-        )
-        .unwrap();
+    let style = ProgressStyle::default_bar().template(STYLE).unwrap();
 
     probs
         .par_iter()
         .progress_with_style(style)
         .enumerate()
-        .map(|(h, e)| match positions.get(&h) {
+        .map(|(hash, equity)| match positions.get(&hash) {
             Some(rolls) => {
                 let mut possiblilies = 0.0;
                 let mut total = Probabilities::empty();
@@ -106,16 +134,14 @@ fn equity_update(positions: &Unique, probs: &Vec<Probabilities>) -> Vec<Probabil
                     lose_bg: total.lose_bg / possiblilies,
                 }
             }
-            None => *e,
+            None => *equity,
         })
         .collect()
 }
 
-type Unique = HashMap<usize, Vec<(f32, Vec<usize>)>>;
+type PosMap = HashMap<usize, Vec<(f32, Vec<usize>)>>;
 
-fn unqiue(verbose: bool) -> (Unique, Vec<Probabilities>) {
-    let mut equities = vec![Probabilities::empty(); POSSIBLE];
-    let mut non_terminal = HashMap::with_capacity(POSSIBLE);
+fn unqiue(verbose: bool) -> Vec<Hypergammon> {
     let position = Hypergammon::new();
     let mut found = HashSet::new();
     let mut new_positons = vec![];
@@ -149,10 +175,8 @@ fn unqiue(verbose: bool) -> (Unique, Vec<Probabilities>) {
         while let Some(position) = queue.pop() {
             match position.game_state() {
                 Ongoing => {
-                    let mut c = vec![];
-                    for (die, n) in ALL_21 {
+                    for (die, _) in ALL_21 {
                         let children = position.possible_positions(&die);
-                        c.push((n, children.iter().map(|pos| pos.dbhash()).collect()));
                         for child in children {
                             if !found.contains(&child) {
                                 found.insert(child);
@@ -160,11 +184,8 @@ fn unqiue(verbose: bool) -> (Unique, Vec<Probabilities>) {
                             }
                         }
                     }
-                    non_terminal.insert(position.dbhash(), c);
                 }
-                GameOver(result) => {
-                    equities[position.dbhash()] = Probabilities::from_result(&result);
-                }
+                GameOver(_) => {}
             }
         }
         let discovered = found.len() - before;
@@ -179,16 +200,65 @@ fn unqiue(verbose: bool) -> (Unique, Vec<Probabilities>) {
         }
     }
 
-    (non_terminal, equities)
+    found.into_iter().collect()
+}
+
+fn split_positions(positions: Vec<Hypergammon>) -> (Vec<Hypergammon>, Vec<Hypergammon>) {
+    let mut ongoing = vec![];
+    let mut gameover = vec![];
+    for position in positions {
+        match position.game_state() {
+            Ongoing => ongoing.push(position),
+            GameOver(_) => gameover.push(position),
+        }
+    }
+    (ongoing, gameover)
+}
+
+fn initial_equities(gameover: Vec<Hypergammon>) -> Vec<Probabilities> {
+    let mut equities = vec![Probabilities::empty(); POSSIBLE];
+    gameover.iter().for_each(|p| {
+        equities[p.dbhash()] = Probabilities::from_result(match &p.game_state() {
+            Ongoing => panic!("Should not be ongoing"),
+            GameOver(result) => result,
+        })
+    });
+    equities
+}
+
+fn create_posmap(ongoing: Vec<Hypergammon>) -> PosMap {
+    let style = ProgressStyle::default_bar().template(STYLE).unwrap();
+
+    let posmap = ongoing
+        .par_iter() // Use par_iter to parallelize the outer loop
+        .progress_with_style(style)
+        .map(|position| {
+            let mut c = vec![];
+            for (die, n) in ALL_21 {
+                let children = position.possible_positions(&die);
+                c.push((n, children.iter().map(|pos| pos.dbhash()).collect()));
+            }
+            (position.dbhash(), c)
+        })
+        .collect();
+
+    posmap
 }
 
 fn run(args: &Args) -> io::Result<()> {
-    let (positions, initial) = unqiue(args.verbose);
-    let mut equities = initial;
+    let positions = match read_unique(args) {
+        Ok(positions) => positions,
+        Err(_) => unqiue(args.verbose),
+    };
+    let (ongoing, gameover) = split_positions(positions);
+    println!("Gameover: {}", gameover.len());
+    let mut equities = initial_equities(gameover);
+    println!("Ongoing: {}", ongoing.len());
+    let posmap = create_posmap(ongoing);
+    println!("Posmap: {}", posmap.len());
     let starting = Hypergammon::new().dbhash();
-    println!("Positions: {}", positions.len());
     for iteration in 0..args.iterations {
-        equities = equity_update(&positions, &equities);
+        equities = equity_update(&posmap, &equities);
         let probs = equities[starting];
         println!(
             "Itr: {}\tStart Equity: {} wn:{:.5} wg:{:.5} wb:{:.5} ln:{:.5} lg:{:.5} lb:{:.5}",
