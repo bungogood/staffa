@@ -11,7 +11,7 @@ use staffa::probabilities::Probabilities;
 use std::{
     collections::{HashMap, HashSet},
     fs::File,
-    io::{self, BufReader, BufWriter, Write},
+    io::{self, BufReader, BufWriter, Read, Write},
     path::PathBuf,
     sync::Arc,
 };
@@ -22,11 +22,11 @@ use std::{
 #[command(author, version, about, long_about = None)]
 struct Args {
     /// Output file
-    #[arg(short = 'f', long = "file", default_value = "data/hyper.full.db")]
+    #[arg(short = 'f', long = "file", default_value = "data/hyper.db")]
     file: PathBuf,
 
     /// Unique file
-    #[arg(short = 'u', long = "unqiue", default_value = "data/unique.csv")]
+    #[arg(short = 'u', long = "unqiue", default_value = "data/unique.db")]
     uniquefile: PathBuf,
 
     /// Number of iterations
@@ -47,35 +47,36 @@ struct Args {
 }
 
 fn read_unique(args: &Args) -> io::Result<Vec<Hypergammon>> {
-    // Open a binary file for writing
     let file = File::open(&args.uniquefile)?;
+    let mut reader = BufReader::new(file);
 
-    let mut rdr = csv::ReaderBuilder::new()
-        .delimiter(args.sep as u8)
-        .has_headers(true)
-        .from_reader(BufReader::new(file));
+    let mut buffer = [0u8; 10];
+    let mut unique = Vec::new();
 
-    let mut positions = vec![];
-
-    for line in rdr.records() {
-        let line = line?;
-        let mut line_iter = line.iter();
-        let pid = line_iter.next().expect("No position id");
-        let position = Hypergammon::from_id(&pid.to_string()).expect("Invalid position id");
-        positions.push(position);
+    while reader.read_exact(&mut buffer).is_ok() {
+        let hypergammon = Hypergammon::decode(buffer);
+        unique.push(hypergammon);
     }
 
-    Ok(positions)
+    Ok(unique)
+}
+
+fn write_unique(args: &Args, unique: &Vec<Hypergammon>) -> io::Result<()> {
+    let file = File::create(&args.uniquefile)?;
+    let mut buf_writer = BufWriter::new(file);
+
+    for position in unique.iter() {
+        buf_writer.write_all(&position.encode())?;
+    }
+
+    buf_writer.flush()
 }
 
 fn write_file(args: &Args, probs: &[Probabilities]) -> io::Result<()> {
-    // Open a binary file for writing
     let file = File::create(&args.file)?;
-
     let mut buf_writer = BufWriter::new(file);
 
-    // Write the array to the file as binary data
-    for &prob in probs.iter() {
+    for prob in probs.iter() {
         if args.probs {
             buf_writer.write_all(&prob.win_normal.to_le_bytes())?;
             buf_writer.write_all(&prob.win_gammon.to_le_bytes())?;
@@ -230,7 +231,7 @@ fn create_posmap(ongoing: Vec<Hypergammon>) -> PosMap {
     let style = ProgressStyle::default_bar().template(STYLE).unwrap();
 
     let posmap = ongoing
-        .par_iter() // Use par_iter to parallelize the outer loop
+        .par_iter()
         .progress_with_style(style)
         .map(|position| {
             let mut c = vec![];
@@ -245,24 +246,58 @@ fn create_posmap(ongoing: Vec<Hypergammon>) -> PosMap {
     posmap
 }
 
+fn check_open(equities: &Vec<Probabilities>) -> Probabilities {
+    let position = Hypergammon::new();
+    let mut possibilies = 0.0;
+    let mut open = Probabilities::empty();
+    for die in ALL_SINGLES {
+        let children = position.possible_positions(&die);
+        let best = children
+            .iter()
+            .map(|child| (equities[child.dbhash()], equities[child.dbhash()].equity()))
+            .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
+            .unwrap()
+            .0;
+        possibilies += 1.0;
+        open = Probabilities {
+            win_normal: open.win_normal + best.win_normal,
+            win_gammon: open.win_gammon + best.win_gammon,
+            win_bg: open.win_bg + best.win_bg,
+            lose_normal: open.lose_normal + best.lose_normal,
+            lose_gammon: open.lose_gammon + best.lose_gammon,
+            lose_bg: open.lose_bg + best.lose_bg,
+        }
+    }
+    Probabilities {
+        win_normal: open.lose_normal / possibilies,
+        win_gammon: open.lose_gammon / possibilies,
+        win_bg: open.lose_bg / possibilies,
+        lose_normal: open.win_normal / possibilies,
+        lose_gammon: open.win_gammon / possibilies,
+        lose_bg: open.win_bg / possibilies,
+    }
+}
+
 fn run(args: &Args) -> io::Result<()> {
     let positions = match read_unique(args) {
         Ok(positions) => positions,
-        Err(_) => unqiue(args.verbose),
+        Err(err) => {
+            println!("Error reading unique file: {}", err);
+            let positions = unqiue(args.verbose);
+            write_unique(args, &positions)?;
+            positions
+        }
     };
+    println!("Positions: {}", positions.len());
     let (ongoing, gameover) = split_positions(positions);
-    println!("Gameover: {}", gameover.len());
     let mut equities = initial_equities(gameover);
-    println!("Ongoing: {}", ongoing.len());
     let posmap = create_posmap(ongoing);
-    println!("Posmap: {}", posmap.len());
-    let starting = Hypergammon::new().dbhash();
     for iteration in 0..args.iterations {
         equities = equity_update(&posmap, &equities);
-        let probs = equities[starting];
+        let probs = check_open(&equities);
         println!(
-            "Itr: {}\tStart Equity: {:.5} wn:{:.5} wg:{:.5} wb:{:.5} ln:{:.5} lg:{:.5} lb:{:.5}",
-            iteration + 1,
+            "Itr: {} Start Equity: {:.5} wn:{:.5} wg:{:.5} wb:{:.5} ln:{:.5} lg:{:.5} lb:{:.5}",
+            iteration,
             probs.equity(),
             probs.win_normal + probs.win_gammon + probs.win_bg,
             probs.win_gammon + probs.win_bg,
