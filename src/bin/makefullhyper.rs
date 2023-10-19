@@ -189,15 +189,17 @@ fn run(args: &Args) -> io::Result<()> {
     println!("Positions: {}", positions.len());
     for iteration in 0..args.iterations {
         equities = equity_update(&positions, &equities);
+        let probs = equities[starting];
         println!(
-            "Itr: {}\tStart Equity: wn:{:.5} wg:{:.5} wb:{:.5} ln:{:.5} lg:{:.5} lb:{:.5}",
+            "Itr: {}\tStart Equity: {} wn:{:.5} wg:{:.5} wb:{:.5} ln:{:.5} lg:{:.5} lb:{:.5}",
             iteration + 1,
-            equities[starting].win_normal,
-            equities[starting].win_gammon,
-            equities[starting].win_bg,
-            equities[starting].lose_normal,
-            equities[starting].lose_gammon,
-            equities[starting].lose_bg,
+            probs.equity(),
+            probs.win_normal,
+            probs.win_gammon,
+            probs.win_bg,
+            probs.lose_normal,
+            probs.lose_gammon,
+            probs.lose_bg,
         );
     }
     println!("Writing to {}", args.file.display());
