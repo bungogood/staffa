@@ -238,15 +238,16 @@ fn create_posmap(ongoing: Vec<Hypergammon>) -> PosMap {
     posmap
 }
 
-fn check_open(position: Hypergammon, equities: &Vec<Probabilities>) -> Probabilities {
+fn check_open(equities: &Vec<Probabilities>) -> Probabilities {
+    let starting = Hypergammon::new();
     let mut possibilies = 0.0;
     let mut open = Probabilities::empty();
     for die in ALL_SINGLES {
-        let children = position.possible_positions(&die);
+        let children = starting.possible_positions(&die);
         let best = children
             .iter()
             .map(|child| (equities[child.dbhash()], equities[child.dbhash()].equity()))
-            .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
+            .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
             .unwrap()
             .0;
         possibilies += 1.0;
@@ -285,7 +286,7 @@ fn run(args: &Args) -> io::Result<()> {
     let posmap = create_posmap(ongoing);
     for iteration in 0..args.iterations {
         equities = equity_update(&posmap, &equities);
-        let probs = check_open(Hypergammon::new(), &equities);
+        let probs = check_open(&equities);
         println!(
             "Itr: {:03} Start Equity: {:.5} wn:{:.5} wg:{:.5} wb:{:.5} ln:{:.5} lg:{:.5} lb:{:.5}",
             iteration,
