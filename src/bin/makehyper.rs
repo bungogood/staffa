@@ -33,14 +33,6 @@ struct Args {
     #[arg(short = 'i', long = "iter", default_value = "100")]
     iterations: usize,
 
-    /// Separator
-    #[arg(short = 's', long = "sep", default_value = ",")]
-    sep: char, // TODO: Fix this to be a single byte and accept ;
-
-    /// Number of iterations
-    #[arg(short = 'p', long = "probs")]
-    probs: bool,
-
     /// Verbose
     #[arg(short = 'v', long = "verbose")]
     verbose: bool,
@@ -77,15 +69,15 @@ fn write_file(args: &Args, probs: &[Probabilities]) -> io::Result<()> {
     let mut buf_writer = BufWriter::new(file);
 
     for prob in probs.iter() {
-        if args.probs {
-            buf_writer.write_all(&prob.win_normal.to_le_bytes())?;
-            buf_writer.write_all(&prob.win_gammon.to_le_bytes())?;
-            buf_writer.write_all(&prob.win_bg.to_le_bytes())?;
-            buf_writer.write_all(&prob.lose_normal.to_le_bytes())?;
-            buf_writer.write_all(&prob.lose_gammon.to_le_bytes())?;
-            buf_writer.write_all(&prob.lose_bg.to_le_bytes())?;
-        } else {
-            buf_writer.write_all(&prob.equity().to_le_bytes())?;
+        let wgbgb = [
+            prob.win_normal + prob.win_gammon + prob.win_bg,
+            prob.win_gammon + prob.win_bg,
+            prob.win_bg,
+            prob.lose_gammon + prob.lose_bg,
+            prob.lose_bg,
+        ];
+        for wgbgb in wgbgb.iter() {
+            buf_writer.write_all(&wgbgb.to_le_bytes())?;
         }
     }
 
@@ -113,7 +105,7 @@ fn equity_update(positions: &PosMap, probs: &Vec<Probabilities>) -> Vec<Probabil
                     let best = children
                         .iter()
                         .map(|child| (shared_probs[*child], shared_probs[*child].equity()))
-                        .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
+                        .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
                         .unwrap()
                         .0;
                     possiblilies += n;
@@ -246,8 +238,7 @@ fn create_posmap(ongoing: Vec<Hypergammon>) -> PosMap {
     posmap
 }
 
-fn check_open(equities: &Vec<Probabilities>) -> Probabilities {
-    let position = Hypergammon::new();
+fn check_open(position: Hypergammon, equities: &Vec<Probabilities>) -> Probabilities {
     let mut possibilies = 0.0;
     let mut open = Probabilities::empty();
     for die in ALL_SINGLES {
@@ -294,9 +285,9 @@ fn run(args: &Args) -> io::Result<()> {
     let posmap = create_posmap(ongoing);
     for iteration in 0..args.iterations {
         equities = equity_update(&posmap, &equities);
-        let probs = check_open(&equities);
+        let probs = check_open(Hypergammon::new(), &equities);
         println!(
-            "Itr: {} Start Equity: {:.5} wn:{:.5} wg:{:.5} wb:{:.5} ln:{:.5} lg:{:.5} lb:{:.5}",
+            "Itr: {:03} Start Equity: {:.5} wn:{:.5} wg:{:.5} wb:{:.5} ln:{:.5} lg:{:.5} lb:{:.5}",
             iteration,
             probs.equity(),
             probs.win_normal + probs.win_gammon + probs.win_bg,
@@ -315,3 +306,11 @@ fn main() -> io::Result<()> {
     let args = Args::parse();
     run(&args)
 }
+
+/*
+BwAAAAYCAAAAAA, -1.24241
+lAAAMAAAQAAAAA, +0.82902
+AwAIQAkAAAAAAA, −1.76175
+DABAAAAAcAAAAA, -1.73588
+BQAAogIAAAAAAA, +2.06012
+ */
