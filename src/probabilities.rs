@@ -55,6 +55,10 @@ impl Probabilities {
         }
     }
 
+    pub fn win_prob(&self) -> f32 {
+        self.win_normal + self.win_gammon + self.win_bg
+    }
+
     pub fn from_result(results: &GameResult) -> Self {
         match results {
             GameResult::WinNormal => Self {

@@ -44,9 +44,10 @@ impl<E: Evaluator<G>, G: State + Eq + Hash> PositionFinder<E, G> {
         while pos.game_state() == Ongoing {
             // Todo: Don't allow doubles in first move
             let dice = self.dice_gen.roll();
+            let pos = self.evaluator.best_position(&pos, &dice);
             let new_positions = pos.possible_positions(&dice);
             // Todo: remove cloning by implementing the Copy trait -> maybe better performance
-            pos = self.evaluator.worst_position(&new_positions).clone();
+            // pos = self.evaluator.worst_position(&new_positions).clone();
             let mut ongoing_games: Vec<G> = new_positions
                 .into_iter()
                 .filter(|p| p.game_state() == Ongoing)
