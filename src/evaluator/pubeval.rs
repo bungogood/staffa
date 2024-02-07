@@ -1,6 +1,12 @@
 use std::marker::PhantomData;
 
 use bkgm::State;
+use bkgm::{
+    position::GamePhase::{GameOver, Ongoing},
+    position::Phase::{Contact, Race},
+};
+
+use super::PartialEvaluator;
 
 /// https://bkgm.com/rgb/rgb.cgi?view+610
 
@@ -46,33 +52,33 @@ pub struct PubEval<G: State> {
     phantom: PhantomData<G>,
 }
 
+impl<G: State> PartialEvaluator<G> for PubEval<G> {
+    fn try_eval(&self, pos: &G) -> f32 {
+        let inputs = Self::to_inputs(pos);
+
+        let mut score = 0.0;
+        match pos.phase() {
+            Ongoing(Race) => {
+                for i in 0..122 {
+                    score += RACE_WEIGHTS[i] * inputs[i];
+                }
+            }
+            Ongoing(Contact) => {
+                for i in 0..122 {
+                    score += CONTACT_WEIGHTS[i] * inputs[i];
+                }
+            }
+            GameOver(_) => score = 9999999.9,
+        }
+        -score
+    }
+}
+
 impl<G: State> PubEval<G> {
     pub fn new() -> Self {
         Self {
             phantom: PhantomData,
         }
-    }
-
-    fn best_position(position: &G) {}
-
-    fn pubeval(position: &G, race: bool) -> f32 {
-        if position.x_off() == 15 {
-            return 9999999.9;
-        }
-
-        let inputs = Self::to_inputs(position);
-
-        let mut score = 0.0;
-        if race {
-            for i in 0..122 {
-                score += RACE_WEIGHTS[i] * inputs[i];
-            }
-        } else {
-            for i in 0..122 {
-                score += CONTACT_WEIGHTS[i] * inputs[i];
-            }
-        }
-        score
     }
 
     fn to_inputs(position: &G) -> [f32; 122] {
@@ -81,6 +87,7 @@ impl<G: State> PubEval<G> {
         for point in 1..=24 {
             let jmp = point - 1;
             let pips = position.pip(25 - point);
+            // let pips = -position.pip(point - 1);
             if pips != 0 {
                 if pips == -1 {
                     inputs[5 * jmp + 0] = 1.0;

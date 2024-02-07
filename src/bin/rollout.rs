@@ -1,9 +1,8 @@
 use bkgm::{Backgammon, State};
 use clap::Parser;
 use indicatif::{ProgressBar, ProgressStyle};
-use staffa::evaluator::{Evaluator, NNEvaluator, OnnxEvaluator, WildbgEvaluator};
+use staffa::evaluator::{Evaluator, NNEvaluator, RolloutEvaluator, WildbgEvaluator};
 use staffa::position_finder::PositionFinder;
-use staffa::rollout::RolloutEvaluator;
 use std::fs::File;
 use std::io;
 use std::path::PathBuf;

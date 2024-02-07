@@ -1,4 +1,4 @@
-use crate::evaluator::Evaluator;
+use crate::evaluator::{Evaluator, PartialEvaluator};
 use crate::inputs::Inputs;
 use crate::probabilities::Probabilities;
 use std::marker::PhantomData;
@@ -12,6 +12,13 @@ pub struct OnnxEvaluator<G: State> {
     #[allow(clippy::type_complexity)]
     model: RunnableModel<TypedFact, Box<dyn TypedOp>, Graph<TypedFact, Box<dyn TypedOp>>>,
     phantom: PhantomData<G>,
+}
+
+impl<G: State> PartialEvaluator<G> for OnnxEvaluator<G> {
+    fn try_eval(&self, pos: &G) -> f32 {
+        let probs = self.eval(pos);
+        probs.equity()
+    }
 }
 
 impl<G: State> Evaluator<G> for OnnxEvaluator<G> {

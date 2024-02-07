@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use crate::dice::{DiceGen, FastrandDice};
-use crate::evaluator::{Evaluator, RandomEvaluator};
+use crate::evaluator::{Evaluator, PartialEvaluator, RandomEvaluator};
 use crate::probabilities::Probabilities;
 use bkgm::State;
 use bkgm::{
@@ -14,6 +14,13 @@ use rayon::prelude::*;
 pub struct RolloutEvaluator<E: Evaluator<G>, G: State> {
     evaluator: E,
     phantom: PhantomData<G>,
+}
+
+impl<E: Evaluator<G> + Sync, G: State> PartialEvaluator<G> for RolloutEvaluator<E, G> {
+    fn try_eval(&self, pos: &G) -> f32 {
+        let probs = self.eval(pos);
+        probs.equity()
+    }
 }
 
 impl<E: Evaluator<G> + Sync, G: State> Evaluator<G> for RolloutEvaluator<E, G> {
@@ -95,7 +102,7 @@ impl<E: Evaluator<G>, G: State> RolloutEvaluator<E, G> {
 #[cfg(test)]
 mod tests {
     use crate::evaluator::Evaluator;
-    use crate::rollout::RolloutEvaluator;
+    use crate::evaluator::RolloutEvaluator;
     use bkgm::{bpos, Backgammon};
 
     #[test]
@@ -149,7 +156,7 @@ mod tests {
 #[cfg(test)]
 mod private_tests {
     use crate::dice::{DiceGenMock, FastrandDice};
-    use crate::rollout::RolloutEvaluator;
+    use crate::evaluator::RolloutEvaluator;
     use bkgm::{bpos, Backgammon, Dice, GameResult};
 
     #[test]

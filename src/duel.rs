@@ -1,19 +1,19 @@
 use std::marker::PhantomData;
 
 use crate::dice::DiceGen;
-use crate::evaluator::Evaluator;
+use crate::evaluator::PartialEvaluator;
 use crate::probabilities::ResultCounter;
 use bkgm::GameState::{GameOver, Ongoing};
 use bkgm::State;
 
-pub struct Duel<T: Evaluator<G>, U: Evaluator<G>, G: State> {
+pub struct Duel<T: PartialEvaluator<G>, U: PartialEvaluator<G>, G: State> {
     evaluator1: T,
     evaluator2: U,
     phantom: PhantomData<G>,
 }
 
 /// Let two `Evaluator`s duel each other. A bit quick and dirty.
-impl<T: Evaluator<G>, U: Evaluator<G>, G: State> Duel<T, U, G> {
+impl<T: PartialEvaluator<G>, U: PartialEvaluator<G>, G: State> Duel<T, U, G> {
     #[allow(clippy::new_without_default)]
     pub fn new(evaluator1: T, evaluator2: U) -> Self {
         Duel {

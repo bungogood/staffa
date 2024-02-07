@@ -1,4 +1,4 @@
-use crate::evaluator::{Evaluator, NNEvaluator};
+use crate::evaluator::{Evaluator, NNEvaluator, PartialEvaluator};
 use crate::probabilities::Probabilities;
 use bkgm::State;
 use std::marker::PhantomData;
@@ -10,6 +10,13 @@ pub struct WildbgEvaluator<G: State> {
     #[allow(clippy::type_complexity)]
     model: RunnableModel<TypedFact, Box<dyn TypedOp>, Graph<TypedFact, Box<dyn TypedOp>>>,
     phantom: PhantomData<G>,
+}
+
+impl<G: State> PartialEvaluator<G> for WildbgEvaluator<G> {
+    fn try_eval(&self, pos: &G) -> f32 {
+        let probs = self.eval(pos);
+        probs.equity()
+    }
 }
 
 impl<G: State> Evaluator<G> for WildbgEvaluator<G> {
